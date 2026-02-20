@@ -1,0 +1,14 @@
+---
+export const prerender = false;
+
+import Layout from '../../layout/layout.astro';
+import PlayerView from '../../components/player/PlayerView';
+
+const { lobbyId } = Astro.params;
+---
+
+<Layout title={`Playing in Lobby ${lobbyId} | Ride the Bus`}>
+  <main class="min-h-screen bg-gray-50">
+    <PlayerView client:load lobbyId={lobbyId} />
+  </main>
+</Layout>

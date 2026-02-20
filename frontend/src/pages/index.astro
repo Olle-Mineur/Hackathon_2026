@@ -1,17 +1,25 @@
 ---
-import "../styles/global.css";
+import Layout from '../layout/layout.astro';
+import LobbyManager from '../components/lobbymanager';
 ---
 
-<html lang="en">
-	<head>
-		<meta charset="utf-8" />
-		<link rel="icon" type="image/svg+xml" href="/favicon.svg" />
-		<link rel="icon" href="/favicon.ico" />
-		<meta name="viewport" content="width=device-width" />
-		<meta name="generator" content={Astro.generator} />
-		<title>Astro</title>
-	</head>
-	<body>
-		<h1>Astro</h1>
-	</body>
-</html>
+<Layout title="Game Lobby">
+  <main class="min-h-screen bg-gray-50">
+    <div class="container mx-auto px-4 py-12">
+      <!-- Simple Header -->
+      <div class="text-center mb-8">
+        <h1 class="text-4xl font-bold text-gray-800 mb-2">
+          Game Lobby
+        </h1>
+        <p class="text-gray-600">
+          Join a game or create your own lobby
+        </p>
+      </div>
+
+      <!-- React Component -->
+      <div class="max-w-md mx-auto">
+        <LobbyManager client:load />
+      </div>
+    </div>
+  </main>
+</Layout>

@@ -1,0 +1,15 @@
+---
+export const prerender = false;
+
+import HostView from '../../components/host/HostView';
+import Layout from '../../layout/layout.astro';
+
+// Get lobbyId from URL
+const { lobbyId } = Astro.params;
+---
+
+<Layout title={`Hosting Lobby ${lobbyId} | Ride the Bus`}>
+  <main className="min-h-screen bg-gray-900">
+    <HostView client:load lobbyId={lobbyId} />
+  </main>
+</Layout>
