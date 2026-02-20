@@ -9,6 +9,7 @@ import (
 
 func main() {
     store := newStore()
+    hub := newLobbyHub()
     mux := http.NewServeMux()
 
     // POST /api/lobbies
@@ -33,15 +34,15 @@ func main() {
             http.Error(w, err.Error(), http.StatusInternalServerError)
             return
         }
+
+        hub.broadcastSession(session.Code, session)
+
         writeJSON(w, http.StatusCreated, map[string]any{
             "hostId":  host.ID,
             "session": session,
         })
     })
 
-    // GET /api/lobbies/{code}
-    // POST /api/lobbies/{code}/join
-    // POST /api/lobbies/{code}/start
     mux.HandleFunc("/api/lobbies/", func(w http.ResponseWriter, r *http.Request) {
         allowCORS(w)
         if r.Method == http.MethodOptions {
@@ -57,6 +58,13 @@ func main() {
         }
         code := parts[0]
 
+        // GET /api/lobbies/{code}/ws
+        if len(parts) == 2 && parts[1] == "ws" && r.Method == http.MethodGet {
+            serveLobbyWS(w, r, store, hub, code)
+            return
+        }
+
+        // GET /api/lobbies/{code}
         if len(parts) == 1 && r.Method == http.MethodGet {
             session, ok := store.GetSession(code)
             if !ok {
@@ -67,6 +75,7 @@ func main() {
             return
         }
 
+        // POST /api/lobbies/{code}/join
         if len(parts) == 2 && parts[1] == "join" && r.Method == http.MethodPost {
             var body struct {
                 Name string `json:"name"`
@@ -79,22 +88,14 @@ func main() {
                 return
             }
 
+            hub.broadcastSession(session.Code, session)
+
             writeJSON(w, http.StatusOK, map[string]any{
                 "playerId": player.ID,
                 "session":  session,
             })
             return
         }
-
-        //if len(parts) == 2 && parts[1] == "start" && r.Method == http.MethodPost {
-        //    session, err := store.StartSession(code)
-        //    if err != nil {
-        //        http.Error(w, err.Error(), http.StatusBadRequest)
-        //        return
-        //    }
-        //    writeJSON(w, http.StatusOK, session)
-        //    return
-        //}
 
         http.NotFound(w, r)
     })

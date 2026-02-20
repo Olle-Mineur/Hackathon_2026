@@ -2,6 +2,7 @@ package main
 
 import (
 	"crypto/rand"
+	"encoding/hex"
 	"errors"
 	"math/big"
 	"strings"
@@ -63,7 +64,7 @@ func (s *Store) CreateSession(hostName string) (*Session, Player, error) {
         hostName = "Host"
     }
 
-    host := Player{ID: newID(), Name: hostName}
+    host := Player{ID: newID("host_"), Name: hostName}
     session := &Session{
         HostID:    host.ID,
         Code:      code,
@@ -90,7 +91,7 @@ func (s *Store) JoinSession(code, name string) (Player, *Session, error) {
     }
 
     player := Player{
-        ID:   newID(),
+        ID:   newID("player_"),
         Name: name,
     }
     session.Players = append(session.Players, player)
@@ -122,9 +123,26 @@ func (s *Store) GetSession(code string) (*Session, bool) {
 //    return session, nil
 //}
 
-var adjectives = []string{"brave", "happy", "rapid", "silent", "mighty", "wild"}
-var animals = []string{"otter", "panda", "falcon", "tiger", "rabbit", "wolf", "jocke"}
-var verbs = []string{"jumps", "dances", "drifts", "runs", "spins", "glows", "drinks", "smokes"}
+var adjectives = []string{
+    "brave", "happy", "rapid", "silent", "mighty", "wild",
+    "tipsy", "rowdy", "sparkly", "neon", "funky", "groovy",
+    "cheery", "bubbly", "jolly", "lively", "epic", "legendary",
+    "electric", "wildcard", "cosmic", "midnight", "sunny", "glittery",
+}
+
+var animals = []string{
+    "otter", "panda", "falcon", "tiger", "rabbit", "wolf", "jocke",
+    "llama", "gecko", "koala", "badger", "raven", "shark", "fox",
+    "penguin", "lemur", "buffalo", "panther", "moose", "beaver",
+    "cougar", "lynx", "orca",
+}
+
+var verbs = []string{
+    "jumps", "dances", "drifts", "runs", "spins", "glows", "drinks", "smokes",
+    "parties", "cheers", "toasts", "vibes", "shuffles",
+    "bounces", "blasts", "sparkles", "slides", "chants", "laughs", "rages",
+    "celebrates", "mingles",
+}
 
 func generateLobbyCode() (string, error) {
     a, err := pickWord(adjectives)
@@ -161,10 +179,34 @@ func cryptoIndex(max int) (int, error) {
     return int(n.Int64()), nil
 }
 
-func newID() string {
-    id, err := generateLobbyCode()
-    if err != nil {
-        return "fallback-id"
+func newUUIDv4() (string, error) {
+    b := make([]byte, 16)
+    if _, err := rand.Read(b); err != nil {
+        return "", err
     }
-    return id
+
+    // RFC 4122 variant + version (v4)
+    b[6] = (b[6] & 0x0f) | 0x40
+    b[8] = (b[8] & 0x3f) | 0x80
+
+    out := make([]byte, 36)
+    hex.Encode(out[0:8], b[0:4])
+    out[8] = '-'
+    hex.Encode(out[9:13], b[4:6])
+    out[13] = '-'
+    hex.Encode(out[14:18], b[6:8])
+    out[18] = '-'
+    hex.Encode(out[19:23], b[8:10])
+    out[23] = '-'
+    hex.Encode(out[24:36], b[10:16])
+
+    return string(out), nil
+}
+
+func newID(prefix string) string {
+    id, err := newUUIDv4()
+    if err != nil {
+        return prefix + "fallback-id"
+    }
+    return prefix + id
 }
