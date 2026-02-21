@@ -19,7 +19,6 @@ const GameControls = ({ gameState, lobbyId, nickname, playerId, usingMock }) => 
     setError('');
     
     if (usingMock) {
-      // Simulate in mock mode
       setTimeout(() => {
         console.log(`Mock: ${nickname} chose ${choice} for round ${gameState.phase}`);
         setSubmitting(false);
@@ -28,12 +27,8 @@ const GameControls = ({ gameState, lobbyId, nickname, playerId, usingMock }) => 
     }
     
     try {
-      // Prepare the request body according to the API spec
-      const requestBody = {
-        choice: choice,
-      };
+      const requestBody = { choice };
       
-      // Add playerId if available, otherwise fall back to nickname
       if (playerId) {
         requestBody.playerId = playerId;
       } else {
@@ -61,7 +56,11 @@ const GameControls = ({ gameState, lobbyId, nickname, playerId, usingMock }) => 
     }
   };
 
-  // Get the appropriate choices based on the current round/phase
+  // Get player's last result
+  const currentPlayer = gameState?.players?.find(p => p.nickname === nickname);
+  const lastResult = currentPlayer?.lastGuessCorrect;
+  const drinkNow = currentPlayer?.drinkNow || 0;
+
   const getChoicesForPhase = () => {
     switch (gameState.phase) {
       case 'red_black':
@@ -86,6 +85,8 @@ const GameControls = ({ gameState, lobbyId, nickname, playerId, usingMock }) => 
           { value: 'clubs', label: '♣️ CLUBS', color: 'bg-gray-800 hover:bg-gray-900' },
           { value: 'spades', label: '♠️ SPADES', color: 'bg-gray-800 hover:bg-gray-900' }
         ];
+      case 'distribution':
+        return []; // No choices during distribution phase
       default:
         return [];
     }
@@ -94,11 +95,60 @@ const GameControls = ({ gameState, lobbyId, nickname, playerId, usingMock }) => 
   const choices = getChoicesForPhase();
 
   // Check if player has already guessed this round
-  const hasGuessed = gameState?.players?.find(p => 
-    p.nickname === nickname
-  )?.ready || false;
+  const hasGuessed = currentPlayer?.ready || false;
 
-  // Don't show controls if no valid choices for this phase
+  // Distribution phase view
+  if (gameState.phase === 'distribution') {
+    return (
+      <div className="bg-white rounded-lg shadow-md p-6">
+        <div className="text-center">
+          <h3 className="text-xl font-bold text-purple-600 mb-2">🍺 Distribution Time!</h3>
+          <p className="text-gray-600 mb-4">Drinks are being handed out...</p>
+          
+          {drinkNow > 0 && (
+            <div className="bg-orange-100 border border-orange-300 rounded-lg p-4 mb-3">
+              <p className="text-2xl font-bold text-orange-600">{drinkNow} 🍺</p>
+              <p className="text-sm text-orange-700">You need to drink {drinkNow} {drinkNow === 1 ? 'sip' : 'sips'}!</p>
+            </div>
+          )}
+          
+          <div className="text-sm text-gray-500">
+            <p>Next round starting soon...</p>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // Show result from previous round
+  if (lastResult !== null && gameState.phase !== 'waiting' && gameState.phase !== 'distribution') {
+    return (
+      <div className="bg-white rounded-lg shadow-md p-6">
+        <div className="text-center">
+          <div className={`text-2xl font-bold mb-2 ${
+            lastResult ? 'text-green-600' : 'text-red-600'
+          }`}>
+            {lastResult ? '✅ CORRECT!' : '❌ WRONG!'}
+          </div>
+          
+          {drinkNow > 0 && (
+            <div className="bg-orange-100 border border-orange-300 rounded-lg p-3 mb-3">
+              <p className="font-semibold text-orange-700">Drink {drinkNow} {drinkNow === 1 ? 'sip' : 'sips'}!</p>
+            </div>
+          )}
+          
+          <p className="text-gray-500 text-sm">
+            {gameState.phase === 'red_black' && 'Get ready for the next round...'}
+            {gameState.phase === 'higher_lower' && 'New card coming...'}
+            {gameState.phase === 'between_outside' && 'Next round starting...'}
+            {gameState.phase === 'suit' && 'Choose your suit...'}
+          </p>
+        </div>
+      </div>
+    );
+  }
+
+  // No choices for this phase
   if (choices.length === 0) {
     return (
       <div className="bg-white rounded-lg shadow-md p-4">
@@ -122,6 +172,7 @@ const GameControls = ({ gameState, lobbyId, nickname, playerId, usingMock }) => 
     );
   }
 
+  // Main game controls
   return (
     <div className="bg-white rounded-lg shadow-md p-4">
       <div className="space-y-3">
@@ -132,7 +183,6 @@ const GameControls = ({ gameState, lobbyId, nickname, playerId, usingMock }) => 
           {gameState.phase === 'suit' && 'Choose your suit:'}
         </p>
         
-        {/* Choice buttons grid */}
         <div className={`grid gap-3 ${
           choices.length === 4 ? 'grid-cols-2' : 'grid-cols-2'
         }`}>
@@ -154,7 +204,6 @@ const GameControls = ({ gameState, lobbyId, nickname, playerId, usingMock }) => 
         </div>
       </div>
       
-      {/* Selected indicator */}
       {selected && !error && (
         <p className="text-sm text-green-600 text-center mt-3">
           ✓ You chose: {selected}
@@ -162,14 +211,12 @@ const GameControls = ({ gameState, lobbyId, nickname, playerId, usingMock }) => 
         </p>
       )}
 
-      {/* Error message */}
       {error && (
         <p className="text-sm text-red-600 text-center mt-3">
           ⚠️ {error}
         </p>
       )}
 
-      {/* Mock mode indicator */}
       {usingMock && (
         <p className="text-xs text-yellow-600 text-center mt-2">
           🧪 Mock mode - choices aren't sent to backend

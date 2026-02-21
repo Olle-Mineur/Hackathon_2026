@@ -151,6 +151,44 @@ const PlayerView = ({ lobbyId }) => {
     return () => clearTimeout(timer);
   }, [hasJoined, connected, gameState]);
 
+  {gameState?.phase !== 'waiting' && gameState?.players && (
+  <div className="mb-4">
+    {gameState.players
+      .filter(p => p.nickname === nickname)
+      .map(player => {
+        if (player.lastGuessCorrect === null || player.lastGuessRound === undefined) return null;
+        
+        const roundNames = ['Red/Black', 'Higher/Lower', 'Between/Outside', 'Suit'];
+        const roundName = roundNames[player.lastGuessRound] || 'Round';
+        
+        return (
+          <div 
+            key={player.id}
+            className={`p-3 rounded-lg text-center ${
+              player.lastGuessCorrect 
+                ? 'bg-green-100 border border-green-300' 
+                : 'bg-red-100 border border-red-300'
+            }`}
+          >
+            <p className={`font-bold ${
+              player.lastGuessCorrect ? 'text-green-700' : 'text-red-700'
+            }`}>
+              {player.lastGuessCorrect ? 'CORRECT!' : 'WRONG!'}
+            </p>
+            <p className="text-sm text-gray-600">
+              {roundName}: You chose "{player.lastGuess}"
+            </p>
+            {player.drinkNow > 0 && (
+              <p className="text-sm font-semibold text-orange-600 mt-1">
+                Drink {player.drinkNow} {player.drinkNow === 1 ? 'sip' : 'sips'}
+              </p>
+            )}
+          </div>
+        );
+      })}
+  </div>
+)}
+
   useEffect(() => () => stopMockUpdates(), []);
 
   const handleAutoJoin = async (savedNickname) => {
