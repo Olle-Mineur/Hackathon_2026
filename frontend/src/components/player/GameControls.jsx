@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import DistributionPanel from "./DistributionPanel";
 
 const GameControls = ({
   gameState,

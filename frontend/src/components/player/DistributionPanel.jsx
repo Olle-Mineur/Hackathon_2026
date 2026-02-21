@@ -15,7 +15,7 @@ const DistributionPanel = ({
     [allocations],
   );
   const leftToAllocate = Math.max(0, giveOutRemaining - totalAllocated);
-  const targets = players.filter((p) => p.id !== meId);
+  const targets = players.filter((p) => p.id !== meId && !p.isSpectator);
 
   return (
     <div className="space-y-3">

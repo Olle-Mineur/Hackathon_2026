@@ -4,6 +4,7 @@ import useLobbySocket, {
 import { useCallback, useEffect, useRef, useState } from "react";
 import CardDisplay from "./CardDisplay";
 import useCountdown from '../useCountdown';
+import JoinQrCard from "./JoinQrCard";
 
 // Mock data for fallback
 const MOCK_GAME_STATES = [
@@ -66,6 +67,7 @@ const HostView = ({ lobbyId }) => {
   const [startingGame, setStartingGame] = useState(false);
   const [restartingGame, setRestartingGame] = useState(false);
   const { formattedTime, isExpired } = useCountdown(gameState?.deadline);
+  const showJoinQr = !gameState || gameState.phase === "waiting";
 
   const startMockCycle = () => {
     if (mockIntervalRef.current) return;
@@ -125,49 +127,47 @@ const HostView = ({ lobbyId }) => {
 
   const handleStartGame = async () => {
     setStartingGame(true);
-    setError('');
+    setError("");
 
     try {
       const response = await fetch(`/api/lobbies/${lobbyId}/start`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
       });
 
       if (!response.ok) {
-        throw new Error('Failed to start game');
+        throw new Error("Failed to start game");
       }
 
-      console.log('Game started successfully');
-      
+      console.log("Game started successfully");
     } catch (err) {
-      setError(err.message || 'Failed to start game');
+      setError(err.message || "Failed to start game");
     } finally {
       setStartingGame(false);
     }
   };
 
-const handleRestartGame = async () => {
-  setRestartingGame(true);
-  setError('');
+  const handleRestartGame = async () => {
+    setRestartingGame(true);
+    setError("");
 
-  try {
-    const response = await fetch(`/api/lobbies/${lobbyId}/start`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-    });
+    try {
+      const response = await fetch(`/api/lobbies/${lobbyId}/start`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+      });
 
-    if (!response.ok) {
-      throw new Error('Failed to restart game');
+      if (!response.ok) {
+        throw new Error("Failed to restart game");
+      }
+
+      console.log("Game restarted successfully");
+    } catch (err) {
+      setError(err.message || "Failed to restart game");
+    } finally {
+      setRestartingGame(false);
     }
-
-    console.log('Game restarted successfully');
-    
-  } catch (err) {
-    setError(err.message || 'Failed to restart game');
-  } finally {
-    setRestartingGame(false);
-  }
-};
+  };
 
   if (loading) {
     return (
@@ -195,12 +195,14 @@ const handleRestartGame = async () => {
         </div>
       )}
 
+      {showJoinQr && <JoinQrCard lobbyId={lobbyId} />}
+
       <div className="text-center mb-8">
         <h1 className="text-4xl font-bold text-white mb-2">Ride the Bus</h1>
         <div className="flex justify-center gap-4 text-gray-400">
           <span>Lobby: {lobbyId}</span>
           <span>•</span>
-          <span>Round {(gameState?.round) || 1}/5</span>
+          <span>Round {gameState?.round || 1}/5</span>
           <span>•</span>
           <span>Players: {gameState?.players?.length || 0}</span>
         </div>
@@ -224,59 +226,93 @@ const handleRestartGame = async () => {
             {gameState?.phase === "between_outside" && "↔️ Between or Outside?"}
             {gameState?.phase === "result" && "🏆 Results"}
           </h2>
-          
-          {gameState?.deadline && gameState?.phase !== 'waiting' && gameState?.phase !== 'result' && (
-          <div className="mt-2 mb-1">
-            <div className="flex items-center justify-center gap-2">
-              <span className="text-gray-400 text-sm">⏱️ Time left:</span>
-              <span className={`font-mono text-xl font-bold ${
-                isExpired ? 'text-red-500' : 
-                (formattedTime && formattedTime < '00:10') ? 'text-yellow-500 animate-pulse' : 
-                'text-white'
-              }`}>
-                {formattedTime || '--:--'}
-              </span>
-            </div>
-          </div>
-          )}
 
-          {gameState?.phase === 'result' && (
-            <div className="mt-4">
-              <button
-                onClick={handleRestartGame}
-                disabled={restartingGame}
-                className={`
-                  px-8 py-4 rounded-lg font-bold text-xl transition-all
-                  ${restartingGame
-                    ? 'bg-gray-600 text-gray-300 cursor-not-allowed'
-                    : 'bg-purple-600 text-white hover:bg-purple-700 active:scale-95'
-                  }
-                `}
-              >
-                {restartingGame ? 'Restarting...' : 'RESTART GAME'}
-              </button>
-              
-              <p className="text-gray-400 text-sm mt-2">
-                Start a new game with the same players
+          {gameState?.noActivePlayersLeft && (
+            <div className="mt-4 rounded-lg border border-orange-400 bg-orange-100 px-4 py-3">
+              <p className="font-bold text-orange-800">
+                All lost/tapped out. Time to give drinks!
               </p>
             </div>
           )}
-          {gameState?.phase === 'waiting' && (
+
+          {gameState?.deadline &&
+            gameState?.phase !== "waiting" &&
+            gameState?.phase !== "result" && (
+              <div className="mt-2 mb-1">
+                <div className="flex items-center justify-center gap-2">
+                  <span className="text-gray-400 text-sm">⏱️ Time left:</span>
+                  <span
+                    className={`font-mono text-xl font-bold ${
+                      isExpired
+                        ? "text-red-500"
+                        : formattedTime && formattedTime < "00:10"
+                          ? "text-yellow-500 animate-pulse"
+                          : "text-white"
+                    }`}
+                  >
+                    {formattedTime || "--:--"}
+                  </span>
+                </div>
+              </div>
+            )}
+
+          {gameState?.phase === "result" && (
+            <div className="max-w-2xl mx-auto mt-6 bg-gray-800 rounded-lg p-4">
+              <h3 className="text-lg font-semibold text-white mb-3">
+                Final Results
+              </h3>
+              <div className="space-y-2">
+                {(gameState.players || [])
+                  .slice()
+                  .sort(
+                    (a, b) => (b.lifetimeDrank || 0) - (a.lifetimeDrank || 0),
+                  )
+                  .map((p) => (
+                    <div
+                      key={p.id || p.nickname}
+                      className="flex items-center justify-between bg-gray-700 rounded px-3 py-2"
+                    >
+                      <span className="text-white">{p.nickname}</span>
+                      <span className="text-gray-200 text-sm">
+                        Drink: {p.drinkNow ?? 0} • Given: {p.givenOut ?? 0} •
+                        Total drank: {p.lifetimeDrank ?? p.score ?? 0}
+                      </span>
+                    </div>
+                  ))}
+              </div>
+
+              <div className="mt-4">
+                <button
+                  onClick={handleRestartGame}
+                  disabled={restartingGame}
+                  className={`px-6 py-3 rounded-lg font-bold transition-all ${
+                    restartingGame
+                      ? "bg-gray-600 text-gray-300 cursor-not-allowed"
+                      : "bg-blue-600 text-white hover:bg-blue-700 active:scale-95"
+                  }`}
+                >
+                  {restartingGame ? "Restarting..." : "RESTART GAME"}
+                </button>
+              </div>
+            </div>
+          )}
+          {gameState?.phase === "waiting" && (
             <div className="mt-4">
               <button
                 onClick={handleStartGame}
                 disabled={startingGame || gameState?.players?.length < 1}
                 className={`
                   px-8 py-4 rounded-lg font-bold text-xl transition-all
-                  ${startingGame || gameState?.players?.length < 1
-                    ? 'bg-gray-600 text-gray-300 cursor-not-allowed'
-                    : 'bg-green-600 text-white hover:bg-green-700 active:scale-95'
+                  ${
+                    startingGame || gameState?.players?.length < 1
+                      ? "bg-gray-600 text-gray-300 cursor-not-allowed"
+                      : "bg-green-600 text-white hover:bg-green-700 active:scale-95"
                   }
                 `}
               >
-                {startingGame ? 'Starting...' : 'START GAME'}
+                {startingGame ? "Starting..." : "START GAME"}
               </button>
-              
+
               {gameState?.players?.length < 1 && (
                 <p className="text-yellow-500 text-sm mt-2">
                   Need at least 1 player to start

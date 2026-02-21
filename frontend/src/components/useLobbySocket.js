@@ -6,11 +6,14 @@ export const mapSessionToViewState = (session) => {
   const round = game?.round ?? 0;
   const started = game?.started ?? false;
 
-  // New drink/distribution fields (safe fallbacks for old backend payloads)
   const distributionDeadline = game?.distributionDeadline ?? null;
   const distributionActive =
     Boolean(game?.distributionActive) ||
     (distributionDeadline && !started && round >= 4);
+
+  const activePlayers = game?.activePlayers || [];
+  const noActivePlayersLeft =
+    !started && !distributionActive && round > 0 && activePlayers.length === 0;
 
   let phase = "waiting";
   if (distributionActive) {
@@ -89,7 +92,6 @@ export const mapSessionToViewState = (session) => {
     }
   }
 
-  const activePlayers = game?.activePlayers || [];
   const drinkNowByPlayer = game?.drinkNowByPlayer || {};
   const giveOutRemainingByPlayer = game?.giveOutRemainingByPlayer || {};
   const pendingTapOutByPlayer = game?.pendingTapOutByPlayer || {};
@@ -97,7 +99,9 @@ export const mapSessionToViewState = (session) => {
   const players = (session?.players || [])
     .filter((p) => p.id !== session?.hostId)
     .map((p) => {
-      const isSpectator = started && !activePlayers.includes(p.id);
+      const isSpectator =
+        (started || distributionActive || round > 0) &&
+        !activePlayers.includes(p.id);
       const guesses = (game?.guesses?.[p.id] || []).map(normalizeGuess);
       const hasGuessedThisRound =
         guesses.length > round && guesses[round] !== "";
@@ -118,13 +122,14 @@ export const mapSessionToViewState = (session) => {
         ready: hasGuessedThisRound,
         score: p.score || 0,
         lifetimeDrank: p.lifetimeDrank ?? p.score ?? 0,
+        givenOut: p.givenOut ?? 0,
         drinkNow: drinkNowByPlayer[p.id] ?? 0,
         giveOutRemaining: giveOutRemainingByPlayer[p.id] ?? 0,
         pendingTapOut: Boolean(pendingTapOutByPlayer[p.id]),
-        guesses, // full guess history per player
-        lastGuess, // most recently resolved guess
-        lastGuessRound, // 0..3
-        lastGuessCorrect, // true | false | null
+        guesses,
+        lastGuess,
+        lastGuessRound,
+        lastGuessCorrect,
         isSpectator,
       };
     });
@@ -137,6 +142,8 @@ export const mapSessionToViewState = (session) => {
     previousCard,
     deadline: game?.deadline ?? null,
     distributionDeadline,
+    activePlayersCount: activePlayers.length,
+    noActivePlayersLeft,
     lobbyStatus: session?.status ?? "active",
     shuttingDownAt: session?.shuttingDownAt ?? null,
   };

@@ -130,6 +130,27 @@ func TapOut(s *Session, playerID string) error {
     return nil
 }
 
+func hasAnyGiveOutRemaining(s *Session) bool {
+    for _, v := range s.Game.GiveOutRemainingByPlayer {
+        if v > 0 {
+            return true
+        }
+    }
+    return false
+}
+
+func distributionTargets(s *Session) []string {
+    // Only non-spectators (active players) are valid targets.
+    targets := make([]string, 0, len(s.Game.ActivePlayers))
+    for _, pid := range s.Game.ActivePlayers {
+        if pid == s.HostID {
+            continue
+        }
+        targets = append(targets, pid)
+    }
+    return targets
+}
+
 func AdvanceRound(s *Session) error {
     if s == nil {
         return errors.New("session required")
@@ -199,6 +220,25 @@ func AdvanceRound(s *Session) error {
     s.Game.ActivePlayers = nextActive
     s.Game.PendingTapOutByPlayer = map[string]bool{}
 
+    // End game early if nobody is active anymore
+    if len(s.Game.ActivePlayers) == 0 {
+        s.Game.Started = false
+        s.Game.Deadline = nil
+
+        // still run distribution if anyone has drinks to give out
+        if hasAnyGiveOutRemaining(s) {
+            deadline := time.Now().UTC().Add(DistributionDuration)
+            s.Game.DistributionActive = true
+            s.Game.DistributionDeadline = &deadline
+            return nil
+        }
+
+        s.Game.DistributionActive = false
+        s.Game.DistributionDeadline = nil
+        s.Game.Round++ // keeps UI in result
+        return nil
+    }
+
     s.Game.Round++
     if s.Game.Round > 3 {
         deadline := time.Now().UTC().Add(DistributionDuration)
@@ -231,7 +271,7 @@ func DistributeDrinks(s *Session, fromPlayerID string, allocations map[string]in
     }
 
     validTarget := map[string]bool{}
-    for _, pid := range s.Game.ActivePlayers {
+    for _, pid := range distributionTargets(s) {
         validTarget[pid] = true
     }
 
@@ -291,7 +331,7 @@ func FinalizeDistribution(s *Session) error {
         return nil
     }
 
-    targets := append([]string{}, s.Game.ActivePlayers...)
+    targets := distributionTargets(s)
     for giverID, left := range s.Game.GiveOutRemainingByPlayer {
         for left > 0 {
             pool := make([]string, 0, len(targets))
@@ -300,14 +340,17 @@ func FinalizeDistribution(s *Session) error {
                     pool = append(pool, t)
                 }
             }
-            if len(pool) == 0 {
-                break
+
+            // If no eligible target exists, giver drinks it.
+            targetID := giverID
+            if len(pool) > 0 {
+                j, err := cryptoInt(len(pool))
+                if err != nil {
+                    return err
+                }
+                targetID = pool[j]
             }
-            j, err := cryptoInt(len(pool))
-            if err != nil {
-                return err
-            }
-            targetID := pool[j]
+
             s.Game.DrinkNowByPlayer[targetID]++
             for i := range s.Players {
                 if s.Players[i].ID == targetID {
@@ -316,6 +359,7 @@ func FinalizeDistribution(s *Session) error {
                     break
                 }
             }
+
             s.Game.GiveOutRemainingByPlayer[giverID]--
             left--
         }
@@ -331,8 +375,9 @@ func allDistributed(s *Session) bool {
     if s == nil {
         return false
     }
-    for _, pid := range s.Game.ActivePlayers {
-        if s.Game.GiveOutRemainingByPlayer[pid] > 0 {
+    // Do not depend on ActivePlayers here.
+    for _, left := range s.Game.GiveOutRemainingByPlayer {
+        if left > 0 {
             return false
         }
     }
