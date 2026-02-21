@@ -174,7 +174,7 @@ const HostView = ({ lobbyId }) => {
         <div className="flex justify-center gap-4 text-gray-400">
           <span>Lobby: {lobbyId}</span>
           <span>•</span>
-          <span>Round {gameState?.round || 1}/4</span>
+          <span>Round {(gameState?.round) || 1}/5</span>
           <span>•</span>
           <span>Players: {gameState?.players?.length || 0}</span>
         </div>
