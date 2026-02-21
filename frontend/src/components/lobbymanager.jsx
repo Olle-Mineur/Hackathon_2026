@@ -33,7 +33,11 @@ const LobbyManager = () => {
 
       const data = await response.json();
       const code = data?.session?.code;
-      setSuccess(`Lobby created! Code: ${code}`);
+      
+      localStorage.setItem('playerNickname', hostName.trim());
+
+      window.location.href = `/host/${code}`;
+
     } catch (err) {
       setError(err.message || "Failed to create lobby");
     } finally {
@@ -70,6 +74,11 @@ const LobbyManager = () => {
       }
 
       setSuccess(`Joined lobby ${lobbyCode}!`);
+
+      localStorage.setItem('playerNickname', hostName.trim());
+
+      window.location.href = `/play/${lobbyCode}`;
+
     } catch (err) {
       setError(err.message || "Failed to join lobby");
     } finally {

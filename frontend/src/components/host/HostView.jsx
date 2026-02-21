@@ -62,6 +62,7 @@ const HostView = ({ lobbyId }) => {
   const [error, setError] = useState("");
   const [usingMock, setUsingMock] = useState(false);
   const mockIntervalRef = useRef(null);
+  const [startingGame, setStartingGame] = useState(false);
 
   const startMockCycle = () => {
     if (mockIntervalRef.current) return;
@@ -119,6 +120,29 @@ const HostView = ({ lobbyId }) => {
     return () => stopMockCycle();
   }, []);
 
+  const handleStartGame = async () => {
+    setStartingGame(true);
+    setError('');
+
+    try {
+      const response = await fetch(`/api/lobbies/${lobbyId}/start`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to start game');
+      }
+
+      console.log('Game started successfully');
+      
+    } catch (err) {
+      setError(err.message || 'Failed to start game');
+    } finally {
+      setStartingGame(false);
+    }
+  };
+
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-900">
@@ -150,7 +174,7 @@ const HostView = ({ lobbyId }) => {
         <div className="flex justify-center gap-4 text-gray-400">
           <span>Lobby: {lobbyId}</span>
           <span>•</span>
-          <span>Round {gameState?.round || 1}/4</span>
+          <span>Round {(gameState?.round) || 1}/5</span>
           <span>•</span>
           <span>Players: {gameState?.players?.length || 0}</span>
         </div>
@@ -174,6 +198,30 @@ const HostView = ({ lobbyId }) => {
             {gameState?.phase === "between_outside" && "↔️ Between or Outside?"}
             {gameState?.phase === "result" && "🏆 Results"}
           </h2>
+          
+          {gameState?.phase === 'waiting' && (
+            <div className="mt-4">
+              <button
+                onClick={handleStartGame}
+                disabled={startingGame || gameState?.players?.length < 1}
+                className={`
+                  px-8 py-4 rounded-lg font-bold text-xl transition-all
+                  ${startingGame || gameState?.players?.length < 1
+                    ? 'bg-gray-600 text-gray-300 cursor-not-allowed'
+                    : 'bg-green-600 text-white hover:bg-green-700 active:scale-95'
+                  }
+                `}
+              >
+                {startingGame ? 'Starting...' : 'START GAME'}
+              </button>
+              
+              {gameState?.players?.length < 1 && (
+                <p className="text-yellow-500 text-sm mt-2">
+                  Need at least 1 player to start
+                </p>
+              )}
+            </div>
+          )}
         </div>
       </div>
 

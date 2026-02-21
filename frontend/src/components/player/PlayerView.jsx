@@ -265,7 +265,7 @@ const PlayerView = ({ lobbyId }) => {
         <div className="text-right">
           <p className="font-medium">{nickname}</p>
           <p className="text-sm text-gray-600">
-            Round {gameState?.round || 1}/4
+            Round {gameState?.round || 1}/5
           </p>
         </div>
       </div>
