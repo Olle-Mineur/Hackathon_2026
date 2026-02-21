@@ -92,6 +92,7 @@ export const mapSessionToViewState = (session) => {
   const activePlayers = game?.activePlayers || [];
   const drinkNowByPlayer = game?.drinkNowByPlayer || {};
   const giveOutRemainingByPlayer = game?.giveOutRemainingByPlayer || {};
+  const pendingTapOutByPlayer = game?.pendingTapOutByPlayer || {};
 
   const players = (session?.players || [])
     .filter((p) => p.id !== session?.hostId)
@@ -119,6 +120,7 @@ export const mapSessionToViewState = (session) => {
         lifetimeDrank: p.lifetimeDrank ?? p.score ?? 0,
         drinkNow: drinkNowByPlayer[p.id] ?? 0,
         giveOutRemaining: giveOutRemainingByPlayer[p.id] ?? 0,
+        pendingTapOut: Boolean(pendingTapOutByPlayer[p.id]),
         guesses, // full guess history per player
         lastGuess, // most recently resolved guess
         lastGuessRound, // 0..3

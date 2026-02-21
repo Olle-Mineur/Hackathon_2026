@@ -198,3 +198,18 @@ func (s *RedisStore) FinalizeDistribution(code string) (*Session, error) {
     }
     return session, nil
 }
+
+func (s *RedisStore) TapOut(code, playerID string) (*Session, error) {
+    session, ok := s.GetSession(code)
+    if !ok {
+        return nil, errors.New("session not found")
+    }
+    if err := TapOut(session, playerID); err != nil {
+        return nil, err
+    }
+    b, _ := json.Marshal(session)
+    if err := s.rdb.Set(s.ctx, sessionKey(code), b, s.ttl).Err(); err != nil {
+        return nil, err
+    }
+    return session, nil
+}

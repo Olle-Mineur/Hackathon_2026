@@ -295,6 +295,62 @@ func main() {
             return
         }
 
+        // POST /api/lobbies/{code}/tap
+        if len(parts) == 2 && parts[1] == "tap" && r.Method == http.MethodPost {
+            var body struct {
+                PlayerID string `json:"playerId"`
+                Nickname string `json:"nickname"`
+            }
+            _ = json.NewDecoder(r.Body).Decode(&body)
+
+            pID := body.PlayerID
+            if pID == "" {
+                if s, ok := store.GetSession(code); ok {
+                    for _, p := range s.Players {
+                        if p.Name == body.Nickname {
+                            pID = p.ID
+                            break
+                        }
+                    }
+                }
+            }
+            if pID == "" {
+                http.Error(w, "playerId required", http.StatusBadRequest)
+                return
+            }
+
+            session, err := store.TapOut(code, pID)
+            if err != nil {
+                http.Error(w, err.Error(), http.StatusBadRequest)
+                return
+            }
+
+            if bus != nil {
+                _ = bus.PublishSession(ctx, session)
+            } else {
+                hub.broadcastSession(session.Code, session)
+            }
+
+            // if everyone else already guessed, advance now
+            if allGuessed(session) {
+                if nextSession, err := store.AdvanceRound(code); err == nil {
+                    if bus != nil {
+                        _ = bus.PublishSession(ctx, nextSession)
+                    } else {
+                        hub.broadcastSession(nextSession.Code, nextSession)
+                    }
+                    if nextSession.Game.Started {
+                        scheduleAutoAdvance(ctx, code, nextSession.Game.Round, store, bus, hub)
+                    } else if nextSession.Game.DistributionActive && nextSession.Game.DistributionDeadline != nil {
+                        scheduleDistributionFinalize(ctx, code, *nextSession.Game.DistributionDeadline, store, bus, hub)
+                    }
+                }
+            }
+
+            writeJSON(w, http.StatusOK, session)
+            return
+        }
+
         http.NotFound(w, r)
     })
 
