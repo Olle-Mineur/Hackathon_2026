@@ -5,7 +5,10 @@ import (
 	"encoding/json"
 	"log"
 	"net/http"
+	"os"
+	"os/signal"
 	"strings"
+	"syscall"
 	"time"
 )
 
@@ -245,23 +248,44 @@ func main() {
         http.NotFound(w, r)
     })
 
-    log.Println("backend listening on :3000")
-    log.Fatal(http.ListenAndServe(":3000", mux))
+    server := &http.Server{
+        Addr:    ":3000",
+        Handler: mux,
+    }
+
+    go func() {
+        log.Println("backend listening on :3000")
+        if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+            log.Fatalf("listen: %s\n", err)
+        }
+    }()
+
+    // Wait for interrupt signal to gracefully shutdown the server
+    quit := make(chan os.Signal, 1)
+    signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
+    <-quit
+    log.Println("Shutting down server...")
+
+    ctxShutdown, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+    defer cancel()
+    if err := server.Shutdown(ctxShutdown); err != nil {
+        log.Fatal("Server forced to shutdown:", err)
+    }
+
+    log.Println("Server exiting")
 }
 
 func allGuessed(s *Session) bool {
     if !s.Game.Started {
         return false
     }
-    expected := len(s.Players) - 1 // exclude host
+    expected := len(s.Game.ActivePlayers)
     if expected <= 0 {
         return false
     }
     actual := 0
-    for pid, guesses := range s.Game.Guesses {
-        if pid == s.HostID {
-            continue
-        }
+    for _, pid := range s.Game.ActivePlayers {
+        guesses := s.Game.Guesses[pid]
         if len(guesses) > s.Game.Round && guesses[s.Game.Round] != "" {
             actual++
         }
@@ -270,13 +294,13 @@ func allGuessed(s *Session) bool {
 }
 
 func scheduleAutoAdvance(ctx context.Context, code string, round int, store *RedisStore, bus *redisBus, hub *lobbyHub) {
-    time.AfterFunc(10*time.Second, func() {
+    time.AfterFunc(RoundDuration, func() {
         session, ok := store.GetSession(code)
         // If game ended or round already advanced, do nothing
         if !ok || !session.Game.Started || session.Game.Round != round {
             return
         }
-        
+
         if nextSession, err := store.AdvanceRound(code); err == nil {
             if bus != nil {
                 _ = bus.PublishSession(ctx, nextSession)
@@ -290,7 +314,11 @@ func scheduleAutoAdvance(ctx context.Context, code string, round int, store *Red
 }
 
 func allowCORS(w http.ResponseWriter) {
-    w.Header().Set("Access-Control-Allow-Origin", "*")
+    allowedOrigin := os.Getenv("ALLOWED_ORIGIN")
+    if allowedOrigin == "" {
+        allowedOrigin = "*" // Dev mode fallback
+    }
+    w.Header().Set("Access-Control-Allow-Origin", allowedOrigin)
     w.Header().Set("Access-Control-Allow-Methods", "GET,POST,OPTIONS")
     w.Header().Set("Access-Control-Allow-Headers", "Content-Type")
 }

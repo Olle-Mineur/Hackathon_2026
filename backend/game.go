@@ -5,6 +5,7 @@ import (
 	"errors"
 	"math/big"
 	"strings"
+	"time"
 )
 
 type Suit string
@@ -16,6 +17,8 @@ const (
     Spades   Suit = "spades"
 )
 
+const RoundDuration = 15 * time.Second
+
 var Suits = []Suit{Hearts, Diamonds, Clubs, Spades}
 
 type Card struct {
@@ -24,10 +27,12 @@ type Card struct {
 }
 
 type GameState struct {
-    Started bool                `json:"started"`
-    Round   int                 `json:"round"` // 0..3
-    Shared  [4]Card             `json:"shared"`
-    Guesses map[string][]string `json:"guesses"` // playerID -> guesses by round index
+    Started       bool                `json:"started"`
+    Round         int                 `json:"round"` // 0..3
+    Shared        [4]Card             `json:"shared"`
+    Guesses       map[string][]string `json:"guesses"` // playerID -> guesses by round index
+    Deadline      *time.Time          `json:"deadline,omitempty"`
+    ActivePlayers []string            `json:"activePlayers"`
 }
 
 func StartGame(s *Session) error {
@@ -43,11 +48,22 @@ func StartGame(s *Session) error {
         return err
     }
 
+    deadline := time.Now().UTC().Add(RoundDuration)
+
+    var active []string
+    for _, p := range s.Players {
+        if p.ID != s.HostID {
+            active = append(active, p.ID)
+        }
+    }
+
     s.Game = GameState{
-        Started: true,
-        Round:   0,
-        Shared:  [4]Card{cards[0], cards[1], cards[2], cards[3]},
-        Guesses: map[string][]string{},
+        Started:       true,
+        Round:         0,
+        Shared:        [4]Card{cards[0], cards[1], cards[2], cards[3]},
+        Guesses:       map[string][]string{},
+        Deadline:      &deadline,
+        ActivePlayers: active,
     }
     return nil
 }
@@ -95,11 +111,20 @@ func AdvanceRound(s *Session) error {
     }
 
     round := s.Game.Round
+    activeMap := make(map[string]bool)
+    for _, pid := range s.Game.ActivePlayers {
+        activeMap[pid] = true
+    }
+
     for i := range s.Players {
         p := &s.Players[i]
+        if !activeMap[p.ID] {
+            continue // Skip spectators
+        }
         guesses := s.Game.Guesses[p.ID]
         if len(guesses) <= round {
-            continue // no guess submitted
+            p.Score++ // Penalize if they didn't guess in time
+            continue
         }
         if !isCorrectGuess(s.Game.Shared, round, guesses[round]) {
             p.Score++
@@ -109,6 +134,10 @@ func AdvanceRound(s *Session) error {
     s.Game.Round++
     if s.Game.Round > 3 {
         s.Game.Started = false
+        s.Game.Deadline = nil
+    } else {
+        deadline := time.Now().UTC().Add(RoundDuration)
+        s.Game.Deadline = &deadline
     }
     return nil
 }
