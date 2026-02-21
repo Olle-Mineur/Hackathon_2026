@@ -173,7 +173,11 @@ func main() {
             } else {
                 hub.broadcastSession(session.Code, session)
             }
-            scheduleAutoAdvance(ctx, code, session.Game.Round, store, bus, hub)
+            if session.Game.Started {
+                scheduleAutoAdvance(ctx, code, session.Game.Round, store, bus, hub)
+            } else if session.Game.DistributionActive && session.Game.DistributionDeadline != nil {
+                scheduleDistributionFinalize(ctx, code, *session.Game.DistributionDeadline, store, bus, hub)
+            }
             writeJSON(w, http.StatusOK, session)
             return
         }
@@ -220,7 +224,11 @@ func main() {
                     } else {
                         hub.broadcastSession(nextSession.Code, nextSession)
                     }
-                    scheduleAutoAdvance(ctx, code, nextSession.Game.Round, store, bus, hub)
+                    if nextSession.Game.Started {
+                        scheduleAutoAdvance(ctx, code, nextSession.Game.Round, store, bus, hub)
+                    } else if nextSession.Game.DistributionActive && nextSession.Game.DistributionDeadline != nil {
+                        scheduleDistributionFinalize(ctx, code, *nextSession.Game.DistributionDeadline, store, bus, hub)
+                    }
                 }
             }
 
@@ -240,7 +248,52 @@ func main() {
             } else {
                 hub.broadcastSession(session.Code, session)
             }
-            scheduleAutoAdvance(ctx, code, session.Game.Round, store, bus, hub)
+            if session.Game.Started {
+                scheduleAutoAdvance(ctx, code, session.Game.Round, store, bus, hub)
+            } else if session.Game.DistributionActive && session.Game.DistributionDeadline != nil {
+                scheduleDistributionFinalize(ctx, code, *session.Game.DistributionDeadline, store, bus, hub)
+            }
+            writeJSON(w, http.StatusOK, session)
+            return
+        }
+
+        // POST /api/lobbies/{code}/distribute
+        if len(parts) == 2 && parts[1] == "distribute" && r.Method == http.MethodPost {
+            var body struct {
+                PlayerID    string         `json:"playerId"`
+                Nickname    string         `json:"nickname"`
+                Allocations map[string]int `json:"allocations"`
+            }
+            _ = json.NewDecoder(r.Body).Decode(&body)
+
+            pID := body.PlayerID
+            if pID == "" {
+                if s, ok := store.GetSession(code); ok {
+                    for _, p := range s.Players {
+                        if p.Name == body.Nickname {
+                            pID = p.ID
+                            break
+                        }
+                    }
+                }
+            }
+            if pID == "" {
+                http.Error(w, "playerId required", http.StatusBadRequest)
+                return
+            }
+
+            session, err := store.DistributeDrinks(code, pID, body.Allocations)
+            if err != nil {
+                http.Error(w, err.Error(), http.StatusBadRequest)
+                return
+            }
+
+            if bus != nil {
+                _ = bus.PublishSession(ctx, session)
+            } else {
+                hub.broadcastSession(session.Code, session)
+            }
+
             writeJSON(w, http.StatusOK, session)
             return
         }
@@ -307,8 +360,38 @@ func scheduleAutoAdvance(ctx context.Context, code string, round int, store *Red
             } else {
                 hub.broadcastSession(nextSession.Code, nextSession)
             }
-            // Schedule the next round's auto-advance
-            scheduleAutoAdvance(ctx, code, nextSession.Game.Round, store, bus, hub)
+
+            if nextSession.Game.Started {
+                scheduleAutoAdvance(ctx, code, nextSession.Game.Round, store, bus, hub)
+            } else if nextSession.Game.DistributionActive && nextSession.Game.DistributionDeadline != nil {
+                scheduleDistributionFinalize(ctx, code, *nextSession.Game.DistributionDeadline, store, bus, hub)
+            }
+        }
+    })
+}
+
+func scheduleDistributionFinalize(ctx context.Context, code string, expectedDeadline time.Time, store *RedisStore, bus *redisBus, hub *lobbyHub) {
+    wait := time.Until(expectedDeadline)
+    if wait < 0 {
+        wait = 0
+    }
+    time.AfterFunc(wait, func() {
+        session, ok := store.GetSession(code)
+        if !ok || !session.Game.DistributionActive || session.Game.DistributionDeadline == nil {
+            return
+        }
+        if !session.Game.DistributionDeadline.Equal(expectedDeadline) {
+            return // stale timer
+        }
+
+        nextSession, err := store.FinalizeDistribution(code)
+        if err != nil {
+            return
+        }
+        if bus != nil {
+            _ = bus.PublishSession(ctx, nextSession)
+        } else {
+            hub.broadcastSession(nextSession.Code, nextSession)
         }
     })
 }

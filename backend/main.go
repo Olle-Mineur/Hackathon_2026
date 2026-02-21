@@ -13,9 +13,11 @@ import (
 const maxCodeGenerationAttempts = 256
 
 type Player struct {
-    ID    string `json:"id"`
-    Name  string `json:"name"`
-    Score int    `json:"score"`
+    ID           string `json:"id"`
+    Name         string `json:"name"`
+    Score        int    `json:"score"` // kept for backward compatibility
+    LifetimeDrank int   `json:"lifetimeDrank"`
+    GivenOut     int    `json:"givenOut"`
 }
 
 type Session struct {
