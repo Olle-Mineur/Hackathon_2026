@@ -168,3 +168,33 @@ func (s *RedisStore) AdvanceRound(code string) (*Session, error) {
     }
     return session, nil
 }
+
+func (s *RedisStore) DistributeDrinks(code, fromPlayerID string, allocations map[string]int) (*Session, error) {
+    session, ok := s.GetSession(code)
+    if !ok {
+        return nil, errors.New("session not found")
+    }
+    if err := DistributeDrinks(session, fromPlayerID, allocations); err != nil {
+        return nil, err
+    }
+    b, _ := json.Marshal(session)
+    if err := s.rdb.Set(s.ctx, sessionKey(code), b, s.ttl).Err(); err != nil {
+        return nil, err
+    }
+    return session, nil
+}
+
+func (s *RedisStore) FinalizeDistribution(code string) (*Session, error) {
+    session, ok := s.GetSession(code)
+    if !ok {
+        return nil, errors.New("session not found")
+    }
+    if err := FinalizeDistribution(session); err != nil {
+        return nil, err
+    }
+    b, _ := json.Marshal(session)
+    if err := s.rdb.Set(s.ctx, sessionKey(code), b, s.ttl).Err(); err != nil {
+        return nil, err
+    }
+    return session, nil
+}

@@ -18,6 +18,7 @@ const (
 )
 
 const RoundDuration = 15 * time.Second
+const DistributionDuration = 20 * time.Second
 
 var Suits = []Suit{Hearts, Diamonds, Clubs, Spades}
 
@@ -27,12 +28,17 @@ type Card struct {
 }
 
 type GameState struct {
-    Started       bool                `json:"started"`
-    Round         int                 `json:"round"` // 0..3
-    Shared        [4]Card             `json:"shared"`
-    Guesses       map[string][]string `json:"guesses"` // playerID -> guesses by round index
-    Deadline      *time.Time          `json:"deadline,omitempty"`
-    ActivePlayers []string            `json:"activePlayers"`
+    Started                  bool                `json:"started"`
+    Round                    int                 `json:"round"` // 0..3 during guesses, 4+ after
+    Shared                   [4]Card             `json:"shared"`
+    Guesses                  map[string][]string `json:"guesses"`
+    Deadline                 *time.Time          `json:"deadline,omitempty"`
+    ActivePlayers            []string            `json:"activePlayers"`
+
+    DistributionActive       bool                `json:"distributionActive"`
+    DistributionDeadline     *time.Time          `json:"distributionDeadline,omitempty"`
+    DrinkNowByPlayer         map[string]int      `json:"drinkNowByPlayer"`
+    GiveOutRemainingByPlayer map[string]int      `json:"giveOutRemainingByPlayer"`
 }
 
 func StartGame(s *Session) error {
@@ -58,14 +64,203 @@ func StartGame(s *Session) error {
     }
 
     s.Game = GameState{
-        Started:       true,
-        Round:         0,
-        Shared:        [4]Card{cards[0], cards[1], cards[2], cards[3]},
-        Guesses:       map[string][]string{},
-        Deadline:      &deadline,
-        ActivePlayers: active,
+        Started:                  true,
+        Round:                    0,
+        Shared:                   [4]Card{cards[0], cards[1], cards[2], cards[3]},
+        Guesses:                  map[string][]string{},
+        Deadline:                 &deadline,
+        ActivePlayers:            active,
+        DistributionActive:       false,
+        DistributionDeadline:     nil,
+        DrinkNowByPlayer:         map[string]int{},
+        GiveOutRemainingByPlayer: map[string]int{},
     }
     return nil
+}
+
+func AdvanceRound(s *Session) error {
+    if s == nil {
+        return errors.New("session required")
+    }
+    if !s.Game.Started {
+        return errors.New("game not started")
+    }
+    if s.Game.Round > 3 {
+        return errors.New("game already finished")
+    }
+
+    round := s.Game.Round
+    activeMap := make(map[string]bool)
+    for _, pid := range s.Game.ActivePlayers {
+        activeMap[pid] = true
+    }
+
+    if s.Game.DrinkNowByPlayer == nil {
+        s.Game.DrinkNowByPlayer = map[string]int{}
+    }
+    if s.Game.GiveOutRemainingByPlayer == nil {
+        s.Game.GiveOutRemainingByPlayer = map[string]int{}
+    }
+
+    for i := range s.Players {
+        p := &s.Players[i]
+        if !activeMap[p.ID] {
+            continue
+        }
+
+        guesses := s.Game.Guesses[p.ID]
+        correct := false
+        if len(guesses) > round {
+            correct = isCorrectGuess(s.Game.Shared, round, guesses[round])
+        }
+
+        if correct {
+            s.Game.GiveOutRemainingByPlayer[p.ID]++
+        } else {
+            s.Game.DrinkNowByPlayer[p.ID]++
+            p.Score++
+            p.LifetimeDrank++
+        }
+    }
+
+    s.Game.Round++
+    if s.Game.Round > 3 {
+        deadline := time.Now().UTC().Add(DistributionDuration)
+        s.Game.Started = false
+        s.Game.Deadline = nil
+        s.Game.DistributionActive = true
+        s.Game.DistributionDeadline = &deadline
+        return nil
+    }
+
+    next := time.Now().UTC().Add(RoundDuration)
+    s.Game.Deadline = &next
+    return nil
+}
+
+func DistributeDrinks(s *Session, fromPlayerID string, allocations map[string]int) error {
+    if s == nil {
+        return errors.New("session required")
+    }
+    if !s.Game.DistributionActive {
+        return errors.New("distribution not active")
+    }
+    if fromPlayerID == "" {
+        return errors.New("player required")
+    }
+
+    remaining := s.Game.GiveOutRemainingByPlayer[fromPlayerID]
+    if remaining <= 0 {
+        return errors.New("no drinks left to give")
+    }
+
+    validTarget := map[string]bool{}
+    for _, pid := range s.Game.ActivePlayers {
+        validTarget[pid] = true
+    }
+
+    used := 0
+    for targetID, amount := range allocations {
+        if amount <= 0 {
+            continue
+        }
+        if targetID == fromPlayerID {
+            return errors.New("cannot give drinks to yourself")
+        }
+        if !validTarget[targetID] {
+            return errors.New("invalid target player")
+        }
+        used += amount
+    }
+    if used <= 0 {
+        return errors.New("no allocation provided")
+    }
+    if used > remaining {
+        return errors.New("allocated more than available")
+    }
+
+    for targetID, amount := range allocations {
+        if amount <= 0 {
+            continue
+        }
+        s.Game.DrinkNowByPlayer[targetID] += amount
+        for i := range s.Players {
+            if s.Players[i].ID == targetID {
+                s.Players[i].Score += amount
+                s.Players[i].LifetimeDrank += amount
+                break
+            }
+        }
+    }
+
+    s.Game.GiveOutRemainingByPlayer[fromPlayerID] -= used
+    for i := range s.Players {
+        if s.Players[i].ID == fromPlayerID {
+            s.Players[i].GivenOut += used
+            break
+        }
+    }
+
+    if allDistributed(s) {
+        return FinalizeDistribution(s)
+    }
+    return nil
+}
+
+func FinalizeDistribution(s *Session) error {
+    if s == nil {
+        return errors.New("session required")
+    }
+    if !s.Game.DistributionActive {
+        return nil
+    }
+
+    targets := append([]string{}, s.Game.ActivePlayers...)
+    for giverID, left := range s.Game.GiveOutRemainingByPlayer {
+        for left > 0 {
+            pool := make([]string, 0, len(targets))
+            for _, t := range targets {
+                if t != giverID {
+                    pool = append(pool, t)
+                }
+            }
+            if len(pool) == 0 {
+                break
+            }
+            j, err := cryptoInt(len(pool))
+            if err != nil {
+                return err
+            }
+            targetID := pool[j]
+            s.Game.DrinkNowByPlayer[targetID]++
+            for i := range s.Players {
+                if s.Players[i].ID == targetID {
+                    s.Players[i].Score++
+                    s.Players[i].LifetimeDrank++
+                    break
+                }
+            }
+            s.Game.GiveOutRemainingByPlayer[giverID]--
+            left--
+        }
+    }
+
+    s.Game.DistributionActive = false
+    s.Game.DistributionDeadline = nil
+    s.Game.Deadline = nil
+    return nil
+}
+
+func allDistributed(s *Session) bool {
+    if s == nil {
+        return false
+    }
+    for _, pid := range s.Game.ActivePlayers {
+        if s.Game.GiveOutRemainingByPlayer[pid] > 0 {
+            return false
+        }
+    }
+    return true
 }
 
 func SubmitGuess(s *Session, playerID, guess string) error {
@@ -96,49 +291,6 @@ func SubmitGuess(s *Session, playerID, guess string) error {
     }
     arr = append(arr, guess)
     s.Game.Guesses[playerID] = arr
-    return nil
-}
-
-func AdvanceRound(s *Session) error {
-    if s == nil {
-        return errors.New("session required")
-    }
-    if !s.Game.Started {
-        return errors.New("game not started")
-    }
-    if s.Game.Round > 3 {
-        return errors.New("game already finished")
-    }
-
-    round := s.Game.Round
-    activeMap := make(map[string]bool)
-    for _, pid := range s.Game.ActivePlayers {
-        activeMap[pid] = true
-    }
-
-    for i := range s.Players {
-        p := &s.Players[i]
-        if !activeMap[p.ID] {
-            continue // Skip spectators
-        }
-        guesses := s.Game.Guesses[p.ID]
-        if len(guesses) <= round {
-            p.Score++ // Penalize if they didn't guess in time
-            continue
-        }
-        if !isCorrectGuess(s.Game.Shared, round, guesses[round]) {
-            p.Score++
-        }
-    }
-
-    s.Game.Round++
-    if s.Game.Round > 3 {
-        s.Game.Started = false
-        s.Game.Deadline = nil
-    } else {
-        deadline := time.Now().UTC().Add(RoundDuration)
-        s.Game.Deadline = &deadline
-    }
     return nil
 }
 
