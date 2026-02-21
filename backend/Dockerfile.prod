@@ -3,10 +3,12 @@ WORKDIR /app
 COPY go.mod go.sum ./
 RUN go mod download
 COPY . .
-RUN go build -o main .
+# Build a fully static binary
+RUN CGO_ENABLED=0 GOOS=linux go build -a -installsuffix cgo -o main .
 
-FROM alpine:latest
+# Use distroless for maximum security and minimal size
+FROM gcr.io/distroless/static-debian12
 WORKDIR /app
 COPY --from=builder /app/main .
 EXPOSE 3000
-CMD ["./main"]
+CMD ["/app/main"]

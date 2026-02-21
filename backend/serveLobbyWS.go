@@ -3,6 +3,8 @@ package main
 import (
 	"encoding/json"
 	"net/http"
+	"os"
+	"strings"
 	"sync"
 	"time"
 
@@ -115,7 +117,14 @@ func (h *lobbyHub) broadcastSession(code string, session *Session) {
 }
 
 var upgrader = websocket.Upgrader{
-    CheckOrigin: func(r *http.Request) bool { return true },
+    CheckOrigin: func(r *http.Request) bool {
+        allowedOrigin := os.Getenv("ALLOWED_ORIGIN")
+        if allowedOrigin == "" {
+            return true // Dev mode fallback
+        }
+        origin := r.Header.Get("Origin")
+        return strings.HasPrefix(origin, allowedOrigin)
+    },
 }
 
 func serveLobbyWS(w http.ResponseWriter, r *http.Request, store sessionGetter, hub *lobbyHub, code string) {

@@ -2,26 +2,32 @@ services:
   backend:
     build:
       context: ./backend
-      dockerfile: Dockerfile
+      dockerfile: Dockerfile.prod
     environment:
       REDIS_ADDR: redis:6379
+      ALLOWED_ORIGIN: https://ridethebus.ollemineur.me
     ports:
       - "3000:3000"
     depends_on:
       redis:
         condition: service_healthy
+    networks:
+      - webnet
+      - redisnet
     restart: unless-stopped
 
   frontend:
     build:
       context: ./frontend
-      dockerfile: Dockerfile
+      dockerfile: Dockerfile.prod
     environment:
       BACKEND_URL: http://backend:3000
     ports:
       - "4321:4321"
     depends_on:
       - backend
+    networks:
+      - webnet
     restart: unless-stopped
 
   redis:
@@ -29,12 +35,19 @@ services:
     command: ["redis-server", "--appendonly", "yes"]
     volumes:
       - redis_data:/data
+    networks:
+      - redisnet
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 5s
       timeout: 3s
       retries: 10
     restart: unless-stopped
+
+networks:
+  webnet:
+  redisnet:
+    internal: true
 
 volumes:
   redis_data:
