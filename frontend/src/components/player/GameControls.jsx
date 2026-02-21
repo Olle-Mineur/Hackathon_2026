@@ -41,23 +41,15 @@ const GameControls = ({
     setError("");
 
     if (usingMock) {
-      setTimeout(() => {
-        console.log(
-          `Mock: ${nickname} chose ${choice} for round ${gameState.phase}`,
-        );
-        setSubmitting(false);
-      }, 500);
+      setTimeout(() => setSubmitting(false), 500);
       return;
     }
 
     try {
       const requestBody = { choice };
-
-      if (playerId) {
-        requestBody.playerId = playerId;
-      } else {
-        requestBody.nickname = nickname;
-      }
+      if (me?.id)
+        requestBody.playerId = me.id; // use resolved player
+      else requestBody.nickname = nickname;
 
       const response = await fetch(`/api/lobbies/${lobbyId}/choice`, {
         method: "POST",
@@ -80,8 +72,8 @@ const GameControls = ({
   const currentPlayer = gameState?.players?.find(
     (p) => p.nickname === nickname,
   );
-  const lastResult = currentPlayer?.lastGuessCorrect;
-  const drinkNow = currentPlayer?.drinkNow || 0;
+  const lastResult = me?.lastGuessCorrect ?? null;
+  const drinkNow = me?.drinkNow || 0;
   const submitDistribution = async () => {
     if (leftToAllocate !== 0 || submitting) return;
     setSubmitting(true);
