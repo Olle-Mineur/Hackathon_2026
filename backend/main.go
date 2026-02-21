@@ -109,21 +109,21 @@ func (s *Store) GetSession(code string) (*Session, bool) {
     return session, ok
 }
 
-//func (s *Store) StartSession(code string) (*Session, error) {
-//    s.mu.Lock()
-//    defer s.mu.Unlock()
-//
-//    session, ok := s.sessions[normalizeCode(code)]
-//    if !ok {
-//        return nil, errors.New("session not found")
-//    }
-//
-//    if err := StartGame(session); err != nil {
-//        return nil, err
-//    }
-//
-//    return session, nil
-//}
+func (s *Store) StartSession(code string) (*Session, error) {
+    s.mu.Lock()
+    defer s.mu.Unlock()
+
+    session, ok := s.sessions[normalizeCode(code)]
+    if !ok {
+        return nil, errors.New("session not found")
+    }
+
+    if err := StartGame(session); err != nil {
+        return nil, err
+    }
+
+    return session, nil
+}
 
 var adjectives = []string{
     "brave", "happy", "rapid", "silent", "mighty", "wild",

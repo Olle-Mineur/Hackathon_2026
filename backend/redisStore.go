@@ -16,6 +16,9 @@ type sessionStore interface {
     JoinSession(code, name string) (Player, *Session, error)
     GetSession(code string) (*Session, bool)
     CloseSession(code string, grace time.Duration) (*Session, error)
+    StartSession(code string) (*Session, error)
+    SubmitGuess(code, playerID, guess string) (*Session, error)
+    AdvanceRound(code string) (*Session, error)
 }
 
 type RedisStore struct {
@@ -116,6 +119,51 @@ func (s *RedisStore) CloseSession(code string, grace time.Duration) (*Session, e
 
     b, _ := json.Marshal(session)
     if err := s.rdb.Set(s.ctx, sessionKey(code), b, grace).Err(); err != nil {
+        return nil, err
+    }
+    return session, nil
+}
+
+func (s *RedisStore) StartSession(code string) (*Session, error) {
+    session, ok := s.GetSession(code)
+    if !ok {
+        return nil, errors.New("session not found")
+    }
+    if err := StartGame(session); err != nil {
+        return nil, err
+    }
+    b, _ := json.Marshal(session)
+    if err := s.rdb.Set(s.ctx, sessionKey(code), b, s.ttl).Err(); err != nil {
+        return nil, err
+    }
+    return session, nil
+}
+
+func (s *RedisStore) SubmitGuess(code, playerID, guess string) (*Session, error) {
+    session, ok := s.GetSession(code)
+    if !ok {
+        return nil, errors.New("session not found")
+    }
+    if err := SubmitGuess(session, playerID, guess); err != nil {
+        return nil, err
+    }
+    b, _ := json.Marshal(session)
+    if err := s.rdb.Set(s.ctx, sessionKey(code), b, s.ttl).Err(); err != nil {
+        return nil, err
+    }
+    return session, nil
+}
+
+func (s *RedisStore) AdvanceRound(code string) (*Session, error) {
+    session, ok := s.GetSession(code)
+    if !ok {
+        return nil, errors.New("session not found")
+    }
+    if err := AdvanceRound(session); err != nil {
+        return nil, err
+    }
+    b, _ := json.Marshal(session)
+    if err := s.rdb.Set(s.ctx, sessionKey(code), b, s.ttl).Err(); err != nil {
         return nil, err
     }
     return session, nil

@@ -158,11 +158,135 @@ func main() {
             return
         }
 
+        // POST /api/lobbies/{code}/start
+        if len(parts) == 2 && parts[1] == "start" && r.Method == http.MethodPost {
+            session, err := store.StartSession(code)
+            if err != nil {
+                http.Error(w, err.Error(), http.StatusBadRequest)
+                return
+            }
+            if bus != nil {
+                _ = bus.PublishSession(ctx, session)
+            } else {
+                hub.broadcastSession(session.Code, session)
+            }
+            scheduleAutoAdvance(ctx, code, session.Game.Round, store, bus, hub)
+            writeJSON(w, http.StatusOK, session)
+            return
+        }
+
+        // POST /api/lobbies/{code}/choice
+        if len(parts) == 2 && parts[1] == "choice" && r.Method == http.MethodPost {
+            var body struct {
+                PlayerID string `json:"playerId"`
+                Nickname string `json:"nickname"`
+                Choice   string `json:"choice"`
+            }
+            _ = json.NewDecoder(r.Body).Decode(&body)
+
+            // Fallback to finding player by nickname if frontend didn't send ID
+            pID := body.PlayerID
+            if pID == "" {
+                if s, ok := store.GetSession(code); ok {
+                    for _, p := range s.Players {
+                        if p.Name == body.Nickname {
+                            pID = p.ID
+                            break
+                        }
+                    }
+                }
+            }
+
+            session, err := store.SubmitGuess(code, pID, body.Choice)
+            if err != nil {
+                http.Error(w, err.Error(), http.StatusBadRequest)
+                return
+            }
+
+            if bus != nil {
+                _ = bus.PublishSession(ctx, session)
+            } else {
+                hub.broadcastSession(session.Code, session)
+            }
+
+            // Auto-advance immediately if everyone has guessed
+            if allGuessed(session) {
+                if nextSession, err := store.AdvanceRound(code); err == nil {
+                    if bus != nil {
+                        _ = bus.PublishSession(ctx, nextSession)
+                    } else {
+                        hub.broadcastSession(nextSession.Code, nextSession)
+                    }
+                    scheduleAutoAdvance(ctx, code, nextSession.Game.Round, store, bus, hub)
+                }
+            }
+
+            writeJSON(w, http.StatusOK, session)
+            return
+        }
+
+        // POST /api/lobbies/{code}/next
+        if len(parts) == 2 && parts[1] == "next" && r.Method == http.MethodPost {
+            session, err := store.AdvanceRound(code)
+            if err != nil {
+                http.Error(w, err.Error(), http.StatusBadRequest)
+                return
+            }
+            if bus != nil {
+                _ = bus.PublishSession(ctx, session)
+            } else {
+                hub.broadcastSession(session.Code, session)
+            }
+            scheduleAutoAdvance(ctx, code, session.Game.Round, store, bus, hub)
+            writeJSON(w, http.StatusOK, session)
+            return
+        }
+
         http.NotFound(w, r)
     })
 
     log.Println("backend listening on :3000")
     log.Fatal(http.ListenAndServe(":3000", mux))
+}
+
+func allGuessed(s *Session) bool {
+    if !s.Game.Started {
+        return false
+    }
+    expected := len(s.Players) - 1 // exclude host
+    if expected <= 0 {
+        return false
+    }
+    actual := 0
+    for pid, guesses := range s.Game.Guesses {
+        if pid == s.HostID {
+            continue
+        }
+        if len(guesses) > s.Game.Round && guesses[s.Game.Round] != "" {
+            actual++
+        }
+    }
+    return actual >= expected
+}
+
+func scheduleAutoAdvance(ctx context.Context, code string, round int, store *RedisStore, bus *redisBus, hub *lobbyHub) {
+    time.AfterFunc(10*time.Second, func() {
+        session, ok := store.GetSession(code)
+        // If game ended or round already advanced, do nothing
+        if !ok || !session.Game.Started || session.Game.Round != round {
+            return
+        }
+        
+        if nextSession, err := store.AdvanceRound(code); err == nil {
+            if bus != nil {
+                _ = bus.PublishSession(ctx, nextSession)
+            } else {
+                hub.broadcastSession(nextSession.Code, nextSession)
+            }
+            // Schedule the next round's auto-advance
+            scheduleAutoAdvance(ctx, code, nextSession.Game.Round, store, bus, hub)
+        }
+    })
 }
 
 func allowCORS(w http.ResponseWriter) {
