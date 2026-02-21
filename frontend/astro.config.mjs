@@ -5,6 +5,8 @@ import { fileURLToPath } from "node:url";
 
 import react from "@astrojs/react";
 
+const backendTarget = process.env.BACKEND_URL || "http://localhost:3000";
+
 // https://astro.build/config
 export default defineConfig({
   vite: {
@@ -21,7 +23,7 @@ export default defineConfig({
     server: {
       proxy: {
         "/api": {
-          target: "http://localhost:3000",
+          target: backendTarget,
           changeOrigin: true,
           ws: true,
         },

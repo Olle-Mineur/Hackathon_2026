@@ -19,11 +19,13 @@ type Player struct {
 }
 
 type Session struct {
-    HostID    string    `json:"hostId"`
-    Code      string    `json:"code"`
-    Players   []Player  `json:"players"`
-    CreatedAt time.Time `json:"createdAt"`
-    Game      GameState `json:"game"`
+    HostID         string     `json:"hostId"`
+    Code           string     `json:"code"`
+    Players        []Player   `json:"players"`
+    CreatedAt      time.Time  `json:"createdAt"`
+    Game           GameState  `json:"game"`
+    Status         string     `json:"status"` // active | closing
+    ShuttingDownAt *time.Time `json:"shuttingDownAt,omitempty"`
 }
 
 type Store struct {

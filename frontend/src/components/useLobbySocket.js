@@ -2,15 +2,14 @@ import { useEffect, useRef, useState } from "react";
 
 export const mapSessionToViewState = (session) => ({
   players: (session?.players || [])
-    .filter((p) => p.id !== session?.hostId) // exclude host from player list/count
-    .map((p) => ({
-      nickname: p.name,
-      ready: true,
-    })),
+    .filter((p) => p.id !== session?.hostId)
+    .map((p) => ({ nickname: p.name, ready: true })),
   round: (session?.game?.round ?? 0) + 1,
   phase: "waiting",
   currentCard: null,
   previousCard: null,
+  lobbyStatus: session?.status ?? "active",
+  shuttingDownAt: session?.shuttingDownAt ?? null,
 });
 
 export default function useLobbySocket({ lobbyId, onSession }) {

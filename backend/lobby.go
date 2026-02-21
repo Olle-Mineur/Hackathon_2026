@@ -1,16 +1,53 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
 	"log"
 	"net/http"
 	"strings"
+	"time"
 )
 
 func main() {
-    store := newStore()
     hub := newLobbyHub()
     mux := http.NewServeMux()
+    ctx := context.Background()
+
+    store, err := newRedisStore(ctx)
+    if err != nil {
+        log.Fatal(err)
+    }
+
+    bus, err := newRedisBus(ctx)
+    if err != nil {
+        log.Printf("redis pub/sub disabled: %v", err)
+    } else {
+        bus.SubscribeAndBroadcast(ctx, hub)
+        log.Println("redis pub/sub enabled")
+    }
+
+    hub.ConfigureIdleClose(15*time.Minute, func(code string) {
+        session, err := store.CloseSession(code, 30*time.Second)
+        if err != nil {
+            return
+        }
+        if bus != nil {
+            _ = bus.PublishSession(ctx, session)
+        } else {
+            hub.broadcastSession(session.Code, session)
+        }
+        log.Printf("lobby %s auto-closed after WS inactivity", code)
+    })
+
+    mux.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) {
+        if r.Method != http.MethodGet {
+            http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+            return
+        }
+        w.WriteHeader(http.StatusOK)
+        _, _ = w.Write([]byte("ok"))
+    })
 
     // POST /api/lobbies
     mux.HandleFunc("/api/lobbies", func(w http.ResponseWriter, r *http.Request) {
@@ -35,7 +72,11 @@ func main() {
             return
         }
 
-        hub.broadcastSession(session.Code, session)
+        if bus != nil {
+            _ = bus.PublishSession(ctx, session)
+        } else {
+            hub.broadcastSession(session.Code, session)
+        }
 
         writeJSON(w, http.StatusCreated, map[string]any{
             "hostId":  host.ID,
@@ -88,12 +129,32 @@ func main() {
                 return
             }
 
-            hub.broadcastSession(session.Code, session)
+            if bus != nil {
+                _ = bus.PublishSession(ctx, session)
+            } else {
+                hub.broadcastSession(session.Code, session)
+            }
 
             writeJSON(w, http.StatusOK, map[string]any{
                 "playerId": player.ID,
                 "session":  session,
             })
+            return
+        }
+
+        // POST /api/lobbies/{code}/close
+        if len(parts) == 2 && parts[1] == "close" && r.Method == http.MethodPost {
+            session, err := store.CloseSession(code, 30*time.Second)
+            if err != nil {
+                http.Error(w, err.Error(), http.StatusBadRequest)
+                return
+            }
+            if bus != nil {
+                _ = bus.PublishSession(ctx, session)
+            } else {
+                hub.broadcastSession(session.Code, session)
+            }
+            writeJSON(w, http.StatusOK, session)
             return
         }
 
