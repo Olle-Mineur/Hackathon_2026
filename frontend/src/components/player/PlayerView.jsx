@@ -3,6 +3,7 @@ import useLobbySocket, {
 } from "@components/useLobbySocket";
 import { useCallback, useEffect, useRef, useState } from "react";
 import GameControls from "./GameControls";
+import useCountdown from '../useCountdown';
 
 // Mock data for fallback
 const MOCK_PLAYER_STATES = [
@@ -47,6 +48,7 @@ const PlayerView = ({ lobbyId }) => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [usingMock, setUsingMock] = useState(false);
+  const { formattedTime, isExpired } = useCountdown(gameState?.deadline);
 
   const mockIntervalRef = useRef(null);
   const playerIdStorageKey = `playerId:${lobbyId}`;
@@ -294,6 +296,20 @@ const PlayerView = ({ lobbyId }) => {
         nickname={nickname}
         usingMock={usingMock}
       />
+      {gameState?.deadline && gameState?.phase !== 'waiting' && gameState?.phase !== 'result' && (
+        <div className="pt-4 mb-4 flex justify-center">
+          <div className="inline-flex items-center gap-2 px-4 py-2 bg-gray-100 rounded-lg">
+            <span className="text-gray-600">⏱️</span>
+            <span className={`font-mono font-bold ${
+              isExpired ? 'text-red-500' : 
+              (formattedTime && formattedTime < '00:10') ? 'text-orange-500 animate-pulse' : 
+              'text-gray-800'
+            }`}>
+              {formattedTime || '--:--'}
+            </span>
+          </div>
+        </div>
+      )}
 
       {gameState?.players && (
         <div className="mt-6">
