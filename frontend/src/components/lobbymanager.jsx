@@ -13,18 +13,12 @@ const LobbyManager = () => {
     setError("");
     setSuccess("");
 
-    if (!hostName.trim()) {
-      setError("Please enter a nickname");
-      return;
-    }
-
     setIsLoading(true);
 
     try {
       const response = await fetch("/api/lobbies", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ hostName: hostName.trim() }),
       });
 
       if (!response.ok) {
@@ -33,11 +27,12 @@ const LobbyManager = () => {
 
       const data = await response.json();
       const code = data?.session?.code;
-      
-      localStorage.setItem('playerNickname', hostName.trim());
+
+      localStorage.setItem("playerNickname", "Host");
 
       window.location.href = `/host/${code}`;
 
+      setSuccess(`Lobby created! Code: ${code}`);
     } catch (err) {
       setError(err.message || "Failed to create lobby");
     } finally {
@@ -63,7 +58,8 @@ const LobbyManager = () => {
     setIsLoading(true);
 
     try {
-      const response = await fetch(`/api/lobbies/${lobbyCode}/join`, {
+      const code = lobbyCode.trim().toUpperCase();
+      const response = await fetch(`/api/lobbies/${code}/join`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ name: hostName.trim() }),
@@ -73,12 +69,15 @@ const LobbyManager = () => {
         throw new Error("Failed to join lobby");
       }
 
-      setSuccess(`Joined lobby ${lobbyCode}!`);
+      const data = await response.json();
 
-      localStorage.setItem('playerNickname', hostName.trim());
+      // store exact keys expected by PlayerView
+      localStorage.setItem(`playerNickname:${code}`, hostName.trim());
+      if (data?.playerId) {
+        localStorage.setItem(`playerId:${code}`, data.playerId);
+      }
 
-      window.location.href = `/play/${lobbyCode}`;
-
+      window.location.href = `/play/${code}`;
     } catch (err) {
       setError(err.message || "Failed to join lobby");
     } finally {
@@ -88,21 +87,6 @@ const LobbyManager = () => {
 
   return (
     <div className="bg-white rounded-lg shadow-md p-6">
-      <div className="mb-4">
-        <label className="block text-sm font-medium text-gray-700 mb-1">
-          Nickname
-        </label>
-        <input
-          type="text"
-          value={hostName}
-          onChange={(e) => setHostName(e.target.value)}
-          placeholder="Enter your nickname"
-          className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:bg-gray-100"
-          maxLength={20}
-          disabled={isLoading}
-        />
-      </div>
-
       {/* Tab Buttons */}
       <div className="flex gap-2 mb-4">
         <button
@@ -136,6 +120,23 @@ const LobbyManager = () => {
           Join
         </button>
       </div>
+
+      {activeTab === "join" && (
+        <div className="mb-4">
+          <label className="block text-sm font-medium text-gray-700 mb-1">
+            Your Nickname
+          </label>
+          <input
+            type="text"
+            value={hostName}
+            onChange={(e) => setHostName(e.target.value)}
+            placeholder="Enter your nickname"
+            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:bg-gray-100"
+            maxLength={20}
+            disabled={isLoading}
+          />
+        </div>
+      )}
 
       {/* Create Form */}
       {activeTab === "create" && (

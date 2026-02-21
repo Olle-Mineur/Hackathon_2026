@@ -13,9 +13,11 @@ import (
 const maxCodeGenerationAttempts = 256
 
 type Player struct {
-    ID    string `json:"id"`
-    Name  string `json:"name"`
-    Score int    `json:"score"`
+    ID           string `json:"id"`
+    Name         string `json:"name"`
+    Score        int    `json:"score"` // kept for backward compatibility
+    LifetimeDrank int   `json:"lifetimeDrank"`
+    GivenOut     int    `json:"givenOut"`
 }
 
 type Session struct {
@@ -160,6 +162,18 @@ func generateLobbyCode() (string, error) {
         return "", err
     }
     return strings.ToUpper(a + "-" + b + "-" + c), nil
+}
+
+func generateRandomHostName() (string, error) {
+    a, err := pickWord(adjectives)
+    if err != nil {
+        return "", err
+    }
+    b, err := pickWord(animals)
+    if err != nil {
+        return "", err
+    }
+    return strings.Title(a) + strings.Title(b), nil
 }
 
 func pickWord(words []string) (string, error) {

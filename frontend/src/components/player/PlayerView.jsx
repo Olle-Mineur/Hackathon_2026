@@ -3,6 +3,8 @@ import useLobbySocket, {
 } from "@components/useLobbySocket";
 import { useCallback, useEffect, useRef, useState } from "react";
 import GameControls from "./GameControls";
+import useCountdown from "../useCountdown";
+import TapOutControl from "./TapOutControl";
 
 // Mock data for fallback
 const MOCK_PLAYER_STATES = [
@@ -42,14 +44,17 @@ const MOCK_PLAYER_STATES = [
 
 const PlayerView = ({ lobbyId }) => {
   const [nickname, setNickname] = useState("");
+  const [playerId, setPlayerId] = useState("");
   const [gameState, setGameState] = useState(null);
   const [hasJoined, setHasJoined] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [usingMock, setUsingMock] = useState(false);
+  const { formattedTime, isExpired } = useCountdown(gameState?.deadline);
 
   const mockIntervalRef = useRef(null);
   const playerIdStorageKey = `playerId:${lobbyId}`;
+  const nicknameStorageKey = `playerNickname:${lobbyId}`;
 
   const stopMockUpdates = () => {
     if (mockIntervalRef.current) {
@@ -94,36 +99,34 @@ const PlayerView = ({ lobbyId }) => {
   // Get nickname + restore player membership on reload
   useEffect(() => {
     const initialize = async () => {
-      const savedNickname = localStorage.getItem("playerNickname");
+      const savedNickname = localStorage.getItem(nicknameStorageKey);
       const savedPlayerId = localStorage.getItem(playerIdStorageKey);
 
-      if (savedNickname) {
-        setNickname(savedNickname);
-      }
+      if (savedNickname) setNickname(savedNickname);
+      if (savedPlayerId) setPlayerId(savedPlayerId);
 
-      // 1) If we already have a playerId, check if still in session
+      // Validate saved playerId belongs to saved nickname in this lobby
       if (savedPlayerId) {
         try {
-          const response = await fetch(`/api/lobbies/${lobbyId}`);
-          if (response.ok) {
-            const session = await response.json();
-            const stillInLobby = (session?.players || []).some(
-              (p) => p.id === savedPlayerId,
+          const res = await fetch(`/api/lobbies/${lobbyId}`);
+          if (res.ok) {
+            const session = await res.json();
+            const p = (session?.players || []).find(
+              (x) => x.id === savedPlayerId,
             );
-            if (stillInLobby) {
+            if (!p || (savedNickname && p.name !== savedNickname)) {
+              localStorage.removeItem(playerIdStorageKey);
+              setPlayerId("");
+            } else {
               setHasJoined(true);
-              return; // do not join again
             }
           }
-          // stale token
-          localStorage.removeItem(playerIdStorageKey);
         } catch {
-          // ignore and continue
+          // ignore
         }
       }
 
-      // 2) Optional fallback: auto-join by saved nickname if no valid playerId
-      if (savedNickname) {
+      if (savedNickname && !savedPlayerId) {
         handleAutoJoin(savedNickname);
       }
     };
@@ -149,6 +152,44 @@ const PlayerView = ({ lobbyId }) => {
     return () => clearTimeout(timer);
   }, [hasJoined, connected, gameState]);
 
+  {gameState?.phase !== 'waiting' && gameState?.players && (
+  <div className="mb-4">
+    {gameState.players
+      .filter(p => p.nickname === nickname)
+      .map(player => {
+        if (player.lastGuessCorrect === null || player.lastGuessRound === undefined) return null;
+        
+        const roundNames = ['Red/Black', 'Higher/Lower', 'Between/Outside', 'Suit'];
+        const roundName = roundNames[player.lastGuessRound] || 'Round';
+        
+        return (
+          <div 
+            key={player.id}
+            className={`p-3 rounded-lg text-center ${
+              player.lastGuessCorrect 
+                ? 'bg-green-100 border border-green-300' 
+                : 'bg-red-100 border border-red-300'
+            }`}
+          >
+            <p className={`font-bold ${
+              player.lastGuessCorrect ? 'text-green-700' : 'text-red-700'
+            }`}>
+              {player.lastGuessCorrect ? 'CORRECT!' : 'WRONG!'}
+            </p>
+            <p className="text-sm text-gray-600">
+              {roundName}: You chose "{player.lastGuess}"
+            </p>
+            {player.drinkNow > 0 && (
+              <p className="text-sm font-semibold text-orange-600 mt-1">
+                Drink {player.drinkNow} {player.drinkNow === 1 ? 'sip' : 'sips'}
+              </p>
+            )}
+          </div>
+        );
+      })}
+  </div>
+)}
+
   useEffect(() => () => stopMockUpdates(), []);
 
   const handleAutoJoin = async (savedNickname) => {
@@ -161,10 +202,10 @@ const PlayerView = ({ lobbyId }) => {
       });
 
       if (!response.ok) throw new Error("Failed to join");
-
       const data = await response.json();
       if (data?.playerId) {
         localStorage.setItem(playerIdStorageKey, data.playerId);
+        setPlayerId(data.playerId);
       }
       setHasJoined(true);
     } catch {
@@ -182,6 +223,9 @@ const PlayerView = ({ lobbyId }) => {
     setError("");
 
     try {
+      localStorage.removeItem(playerIdStorageKey);
+      setPlayerId("");
+
       const response = await fetch(`/api/lobbies/${lobbyId}/join`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -193,9 +237,10 @@ const PlayerView = ({ lobbyId }) => {
       const data = await response.json();
       if (data?.playerId) {
         localStorage.setItem(playerIdStorageKey, data.playerId);
+        setPlayerId(data.playerId);
       }
 
-      localStorage.setItem("playerNickname", nickname.trim());
+      localStorage.setItem(nicknameStorageKey, nickname.trim());
       setHasJoined(true);
     } catch {
       setUsingMock(true);
@@ -206,6 +251,10 @@ const PlayerView = ({ lobbyId }) => {
       setLoading(false);
     }
   };
+
+  const me = (gameState?.players || []).find(
+    (p) => (playerId && p.id === playerId) || p.nickname === nickname,
+  );
 
   if (!hasJoined) {
     return (
@@ -292,8 +341,38 @@ const PlayerView = ({ lobbyId }) => {
         gameState={gameState}
         lobbyId={lobbyId}
         nickname={nickname}
+        playerId={playerId}
         usingMock={usingMock}
       />
+
+      <TapOutControl
+        gameState={gameState}
+        lobbyId={lobbyId}
+        playerId={playerId}
+        nickname={nickname}
+        me={me}
+        usingMock={usingMock}
+      />
+      {gameState?.deadline &&
+        gameState?.phase !== "waiting" &&
+        gameState?.phase !== "result" && (
+          <div className="pt-4 mb-4 flex justify-center">
+            <div className="inline-flex items-center gap-2 px-4 py-2 bg-gray-100 rounded-lg">
+              <span className="text-gray-600">⏱️</span>
+              <span
+                className={`font-mono font-bold ${
+                  isExpired
+                    ? "text-red-500"
+                    : formattedTime && formattedTime < "00:10"
+                      ? "text-orange-500 animate-pulse"
+                      : "text-gray-800"
+                }`}
+              >
+                {formattedTime || "--:--"}
+              </span>
+            </div>
+          </div>
+        )}
 
       {gameState?.players && (
         <div className="mt-6">

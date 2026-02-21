@@ -3,6 +3,7 @@ import useLobbySocket, {
 } from "@components/useLobbySocket";
 import { useCallback, useEffect, useRef, useState } from "react";
 import CardDisplay from "./CardDisplay";
+import useCountdown from '../useCountdown';
 
 // Mock data for fallback
 const MOCK_GAME_STATES = [
@@ -63,6 +64,8 @@ const HostView = ({ lobbyId }) => {
   const [usingMock, setUsingMock] = useState(false);
   const mockIntervalRef = useRef(null);
   const [startingGame, setStartingGame] = useState(false);
+  const [restartingGame, setRestartingGame] = useState(false);
+  const { formattedTime, isExpired } = useCountdown(gameState?.deadline);
 
   const startMockCycle = () => {
     if (mockIntervalRef.current) return;
@@ -143,6 +146,29 @@ const HostView = ({ lobbyId }) => {
     }
   };
 
+const handleRestartGame = async () => {
+  setRestartingGame(true);
+  setError('');
+
+  try {
+    const response = await fetch(`/api/lobbies/${lobbyId}/start`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+    });
+
+    if (!response.ok) {
+      throw new Error('Failed to restart game');
+    }
+
+    console.log('Game restarted successfully');
+    
+  } catch (err) {
+    setError(err.message || 'Failed to restart game');
+  } finally {
+    setRestartingGame(false);
+  }
+};
+
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-900">
@@ -199,6 +225,42 @@ const HostView = ({ lobbyId }) => {
             {gameState?.phase === "result" && "🏆 Results"}
           </h2>
           
+          {gameState?.deadline && gameState?.phase !== 'waiting' && gameState?.phase !== 'result' && (
+          <div className="mt-2 mb-1">
+            <div className="flex items-center justify-center gap-2">
+              <span className="text-gray-400 text-sm">⏱️ Time left:</span>
+              <span className={`font-mono text-xl font-bold ${
+                isExpired ? 'text-red-500' : 
+                (formattedTime && formattedTime < '00:10') ? 'text-yellow-500 animate-pulse' : 
+                'text-white'
+              }`}>
+                {formattedTime || '--:--'}
+              </span>
+            </div>
+          </div>
+          )}
+
+          {gameState?.phase === 'result' && (
+            <div className="mt-4">
+              <button
+                onClick={handleRestartGame}
+                disabled={restartingGame}
+                className={`
+                  px-8 py-4 rounded-lg font-bold text-xl transition-all
+                  ${restartingGame
+                    ? 'bg-gray-600 text-gray-300 cursor-not-allowed'
+                    : 'bg-purple-600 text-white hover:bg-purple-700 active:scale-95'
+                  }
+                `}
+              >
+                {restartingGame ? 'Restarting...' : 'RESTART GAME'}
+              </button>
+              
+              <p className="text-gray-400 text-sm mt-2">
+                Start a new game with the same players
+              </p>
+            </div>
+          )}
           {gameState?.phase === 'waiting' && (
             <div className="mt-4">
               <button
