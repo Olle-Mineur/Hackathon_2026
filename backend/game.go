@@ -39,6 +39,7 @@ type GameState struct {
     DistributionDeadline     *time.Time          `json:"distributionDeadline,omitempty"`
     DrinkNowByPlayer         map[string]int      `json:"drinkNowByPlayer"`
     GiveOutRemainingByPlayer map[string]int      `json:"giveOutRemainingByPlayer"`
+    PendingTapOutByPlayer    map[string]bool     `json:"pendingTapOutByPlayer"`
 }
 
 func StartGame(s *Session) error {
@@ -74,7 +75,58 @@ func StartGame(s *Session) error {
         DistributionDeadline:     nil,
         DrinkNowByPlayer:         map[string]int{},
         GiveOutRemainingByPlayer: map[string]int{},
+        PendingTapOutByPlayer:    map[string]bool{},
     }
+    return nil
+}
+
+func stakeForRound(round int) int {
+    switch round {
+    case 0:
+        return 2
+    case 1:
+        return 4
+    case 2:
+        return 8
+    case 3:
+        return 16
+    default:
+        return 0
+    }
+}
+
+func TapOut(s *Session, playerID string) error {
+    if s == nil {
+        return errors.New("session required")
+    }
+    if !s.Game.Started {
+        return errors.New("game not started")
+    }
+    if !hasPlayer(s, playerID) {
+        return errors.New("player not in session")
+    }
+
+    // must be active
+    isActive := false
+    for _, pid := range s.Game.ActivePlayers {
+        if pid == playerID {
+            isActive = true
+            break
+        }
+    }
+    if !isActive {
+        return errors.New("player already tapped out")
+    }
+
+    // allow tap-out request anytime during current round
+    if s.Game.PendingTapOutByPlayer == nil {
+        s.Game.PendingTapOutByPlayer = map[string]bool{}
+    }
+    if s.Game.PendingTapOutByPlayer[playerID] {
+        return errors.New("tap out already requested")
+    }
+
+    s.Game.PendingTapOutByPlayer[playerID] = true
     return nil
 }
 
@@ -90,6 +142,7 @@ func AdvanceRound(s *Session) error {
     }
 
     round := s.Game.Round
+    stake := stakeForRound(round)
     activeMap := make(map[string]bool)
     for _, pid := range s.Game.ActivePlayers {
         activeMap[pid] = true
@@ -115,12 +168,23 @@ func AdvanceRound(s *Session) error {
         }
 
         if correct {
-            s.Game.GiveOutRemainingByPlayer[p.ID]++
+            s.Game.GiveOutRemainingByPlayer[p.ID] += stake
         } else {
-            s.Game.DrinkNowByPlayer[p.ID]++
-            p.Score++
-            p.LifetimeDrank++
+            s.Game.DrinkNowByPlayer[p.ID] += stake
+            p.Score += stake
+            p.LifetimeDrank += stake
         }
+    }
+
+    if len(s.Game.PendingTapOutByPlayer) > 0 {
+        nextActive := make([]string, 0, len(s.Game.ActivePlayers))
+        for _, pid := range s.Game.ActivePlayers {
+            if !s.Game.PendingTapOutByPlayer[pid] {
+                nextActive = append(nextActive, pid)
+            }
+        }
+        s.Game.ActivePlayers = nextActive
+        s.Game.PendingTapOutByPlayer = map[string]bool{}
     }
 
     s.Game.Round++
