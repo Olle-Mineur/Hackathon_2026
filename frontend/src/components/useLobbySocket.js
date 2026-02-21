@@ -34,15 +34,19 @@ export const mapSessionToViewState = (session) => {
     }
   }
 
+  const activePlayers = game?.activePlayers || [];
+
   const players = (session?.players || [])
     .filter((p) => p.id !== session?.hostId)
     .map((p) => {
+      const isSpectator = started && !activePlayers.includes(p.id);
       const guesses = game?.guesses?.[p.id] || [];
       const hasGuessedThisRound = guesses.length > round && guesses[round] !== "";
       return {
         nickname: p.name,
         ready: hasGuessedThisRound,
-        score: p.score || 0, // Score = Drinks to take
+        score: p.score || 0,
+        isSpectator,
       };
     });
 
@@ -52,6 +56,7 @@ export const mapSessionToViewState = (session) => {
     phase,
     currentCard,
     previousCard,
+    deadline: game?.deadline ?? null,
     lobbyStatus: session?.status ?? "active",
     shuttingDownAt: session?.shuttingDownAt ?? null,
   };
