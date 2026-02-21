@@ -64,12 +64,9 @@ func main() {
             return
         }
 
-        var body struct {
-            HostName string `json:"hostName"`
-        }
-        _ = json.NewDecoder(r.Body).Decode(&body)
+        hostName := generateRandomHostName()
 
-        session, host, err := store.CreateSession(body.HostName)
+        session, host, err := store.CreateSession(hostName)
         if err != nil {
             http.Error(w, err.Error(), http.StatusInternalServerError)
             return
@@ -410,4 +407,16 @@ func writeJSON(w http.ResponseWriter, status int, v any) {
     w.Header().Set("Content-Type", "application/json")
     w.WriteHeader(status)
     _ = json.NewEncoder(w).Encode(v)
+}
+
+func generateRandomHostName() string {
+    const charset = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
+    const length = 16
+    
+    rand.Seed(time.Now().UnixNano())
+    b := make([]byte, length)
+    for i := range b {
+        b[i] = charset[rand.Intn(len(charset))]
+    }
+    return "Host_" + string(b)
 }
