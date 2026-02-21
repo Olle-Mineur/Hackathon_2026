@@ -143,6 +143,7 @@ func AdvanceRound(s *Session) error {
 
     round := s.Game.Round
     stake := stakeForRound(round)
+
     activeMap := make(map[string]bool)
     for _, pid := range s.Game.ActivePlayers {
         activeMap[pid] = true
@@ -154,6 +155,12 @@ func AdvanceRound(s *Session) error {
     if s.Game.GiveOutRemainingByPlayer == nil {
         s.Game.GiveOutRemainingByPlayer = map[string]int{}
     }
+    if s.Game.PendingTapOutByPlayer == nil {
+        s.Game.PendingTapOutByPlayer = map[string]bool{}
+    }
+
+    // track who survives to next round (correct guess)
+    correctByPlayer := make(map[string]bool)
 
     for i := range s.Players {
         p := &s.Players[i]
@@ -169,23 +176,28 @@ func AdvanceRound(s *Session) error {
 
         if correct {
             s.Game.GiveOutRemainingByPlayer[p.ID] += stake
+            correctByPlayer[p.ID] = true
         } else {
             s.Game.DrinkNowByPlayer[p.ID] += stake
             p.Score += stake
             p.LifetimeDrank += stake
+            correctByPlayer[p.ID] = false
         }
     }
 
-    if len(s.Game.PendingTapOutByPlayer) > 0 {
-        nextActive := make([]string, 0, len(s.Game.ActivePlayers))
-        for _, pid := range s.Game.ActivePlayers {
-            if !s.Game.PendingTapOutByPlayer[pid] {
-                nextActive = append(nextActive, pid)
-            }
+    // keep only correct players who did not request tap-out
+    nextActive := make([]string, 0, len(s.Game.ActivePlayers))
+    for _, pid := range s.Game.ActivePlayers {
+        if !correctByPlayer[pid] {
+            continue
         }
-        s.Game.ActivePlayers = nextActive
-        s.Game.PendingTapOutByPlayer = map[string]bool{}
+        if s.Game.PendingTapOutByPlayer[pid] {
+            continue
+        }
+        nextActive = append(nextActive, pid)
     }
+    s.Game.ActivePlayers = nextActive
+    s.Game.PendingTapOutByPlayer = map[string]bool{}
 
     s.Game.Round++
     if s.Game.Round > 3 {
