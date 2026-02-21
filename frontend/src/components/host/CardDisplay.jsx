@@ -2,9 +2,9 @@ const CardDisplay = ({ currentCard, previousCard, phase }) => {
   // If no card yet
   if (!currentCard) {
     return (
-      <div class="bg-gray-800 rounded-xl p-12 text-center">
-        <div class="text-6xl mb-4">🃏</div>
-        <p class="text-gray-400">Waiting for next card...</p>
+      <div className="bg-gray-800 rounded-xl p-12 text-center">
+        <div className="text-6xl mb-4">🃏</div>
+        <p className="text-gray-400">Waiting for next card...</p>
       </div>
     );
   }
@@ -24,7 +24,7 @@ const CardDisplay = ({ currentCard, previousCard, phase }) => {
     const redSuits = ["hearts", "diamonds"];
     return redSuits.includes(suit?.toLowerCase())
       ? "text-red-500"
-      : "text-white";
+      : "text-black";
   };
 
   // Format card value
@@ -39,14 +39,14 @@ const CardDisplay = ({ currentCard, previousCard, phase }) => {
   };
 
   return (
-    <div class="flex flex-col items-center">
+    <div className="flex flex-col items-center">
       {/* Previous Card (if exists) */}
       {previousCard && (
-        <div class="mb-4 opacity-50">
-          <p class="text-gray-400 text-sm mb-2">Previous Card</p>
-          <div class="bg-gray-800 rounded-lg p-3 inline-block">
+        <div className="mb-4">
+          <p className="text-gray-400 text-sm mb-2">Previous Card</p>
+          <div className="bg-white rounded-lg p-3 inline-block">
             <span
-              class={`text-2xl font-bold ${getSuitColor(previousCard.suit)}`}
+              className={`text-2xl font-bold ${getSuitColor(previousCard.suit)}`}
             >
               {formatValue(previousCard.value)}{" "}
               {getSuitSymbol(previousCard.suit)}
@@ -56,24 +56,24 @@ const CardDisplay = ({ currentCard, previousCard, phase }) => {
       )}
 
       {/* Current Card - Large Display */}
-      <div class="relative">
+      <div className="relative">
         {/* Card */}
-        <div class="w-64 h-96 bg-white rounded-2xl shadow-2xl flex flex-col items-center justify-between p-4 transform hover:scale-105 transition-transform">
+        <div className="w-50 h-75 bg-white rounded-2xl shadow-2xl flex flex-col items-center justify-between p-4 transform hover:scale-105 transition-transform">
           {/* Top Left Value */}
           <div
-            class={`self-start text-3xl font-bold ${getSuitColor(currentCard.suit)}`}
+            className={`self-start text-3xl font-bold ${getSuitColor(currentCard.suit)}`}
           >
             {formatValue(currentCard.value)}
           </div>
 
           {/* Center Suit */}
-          <div class={`text-8xl ${getSuitColor(currentCard.suit)}`}>
+          <div className={`text-8xl ${getSuitColor(currentCard.suit)}`}>
             {getSuitSymbol(currentCard.suit)}
           </div>
 
           {/* Bottom Right Value (rotated) */}
           <div
-            class={`self-end text-3xl font-bold rotate-180 ${getSuitColor(currentCard.suit)}`}
+            className={`self-end text-3xl font-bold rotate-180 ${getSuitColor(currentCard.suit)}`}
           >
             {formatValue(currentCard.value)}
           </div>
@@ -81,7 +81,7 @@ const CardDisplay = ({ currentCard, previousCard, phase }) => {
 
         {/* Phase Overlay */}
         {phase !== "waiting" && phase !== "result" && (
-          <div class="absolute -top-3 -right-3 bg-yellow-500 text-black font-bold px-3 py-1 rounded-full text-sm animate-pulse">
+          <div className="absolute -top-3 -right-3 bg-yellow-500 text-black font-bold px-3 py-1 rounded-full text-sm animate-pulse">
             {phase === "red_black" && "🎨 Choose Color"}
             {phase === "higher_lower" && "📊 Higher/Lower"}
             {phase === "between_outside" && "🎯 Between/Outside"}
@@ -90,8 +90,8 @@ const CardDisplay = ({ currentCard, previousCard, phase }) => {
       </div>
 
       {/* Card Info */}
-      <div class="mt-4 text-center">
-        <p class="text-gray-400">
+      <div className="mt-4 text-center">
+        <p className="text-gray-400">
           {currentCard.value === 1 && "Ace"}
           {currentCard.value === 11 && "Jack"}
           {currentCard.value === 12 && "Queen"}

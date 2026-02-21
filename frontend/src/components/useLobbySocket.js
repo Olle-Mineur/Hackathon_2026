@@ -1,54 +1,112 @@
 import { useEffect, useRef, useState } from "react";
 
-export const mapSessionToViewState = (session) => ({
-  players: (session?.players || [])
+export const mapSessionToViewState = (session) => {
+  const game = session?.game;
+  const shared = game?.shared || [];
+  const round = game?.round ?? 0;
+  const started = game?.started ?? false;
+
+  let phase = "waiting";
+  if (started) {
+    const phases = ["red_black", "higher_lower", "between_outside", "suit"];
+    phase = round < 4 ? phases[round] : "result";
+  } else if (round > 0) {
+    phase = "result";
+  }
+
+  const mapCard = (c) => (c && c.rank ? { suit: c.suit, value: c.rank } : null);
+
+  let currentCard = null;
+  let previousCard = null;
+
+  if (started || round > 0) {
+    if (round === 1) {
+      currentCard = mapCard(shared[0]);
+    } else if (round === 2) {
+      currentCard = mapCard(shared[1]);
+      previousCard = mapCard(shared[0]);
+    } else if (round === 3) {
+      currentCard = mapCard(shared[2]);
+      previousCard = mapCard(shared[1]);
+    } else if (round >= 4 || (!started && round > 0)) {
+      currentCard = mapCard(shared[3]);
+      previousCard = mapCard(shared[2]);
+    }
+  }
+
+  const players = (session?.players || [])
     .filter((p) => p.id !== session?.hostId)
-    .map((p) => ({ nickname: p.name, ready: true })),
-  round: (session?.game?.round ?? 0) + 1,
-  phase: "waiting",
-  currentCard: null,
-  previousCard: null,
-  lobbyStatus: session?.status ?? "active",
-  shuttingDownAt: session?.shuttingDownAt ?? null,
-});
+    .map((p) => {
+      const guesses = game?.guesses?.[p.id] || [];
+      const hasGuessedThisRound = guesses.length > round && guesses[round] !== "";
+      return {
+        nickname: p.name,
+        ready: hasGuessedThisRound,
+        score: p.score || 0, // Score = Drinks to take
+      };
+    });
+
+  return {
+    players,
+    round: round + 1,
+    phase,
+    currentCard,
+    previousCard,
+    lobbyStatus: session?.status ?? "active",
+    shuttingDownAt: session?.shuttingDownAt ?? null,
+  };
+};
 
 export default function useLobbySocket({ lobbyId, onSession }) {
-  const wsRef = useRef(null);
-  const onSessionRef = useRef(onSession);
   const [connected, setConnected] = useState(false);
-
-  useEffect(() => {
-    onSessionRef.current = onSession;
-  }, [onSession]);
+  const wsRef = useRef(null);
 
   useEffect(() => {
     if (!lobbyId) return;
 
-    const proto = window.location.protocol === "https:" ? "wss" : "ws";
-    const ws = new WebSocket(
-      `${proto}://${window.location.host}/api/lobbies/${lobbyId}/ws`,
-    );
-    wsRef.current = ws;
+    const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
+    // Use the current host, which Vite proxies to the Go backend
+    const wsUrl = `${protocol}//${window.location.host}/api/lobbies/${lobbyId}/ws`;
 
-    ws.onopen = () => setConnected(true);
+    const connect = () => {
+      const ws = new WebSocket(wsUrl);
 
-    ws.onmessage = (event) => {
-      try {
-        const msg = JSON.parse(event.data);
-        if (msg?.type === "session" && msg?.session) {
-          onSessionRef.current?.(msg.session);
+      ws.onopen = () => {
+        setConnected(true);
+      };
+
+      ws.onmessage = (event) => {
+        try {
+          const data = JSON.parse(event.data);
+          if (data.type === "session" && data.session) {
+            onSession(data.session);
+          } else if (data.code) {
+            // Fallback if backend just sends the raw session object
+            onSession(data);
+          }
+        } catch (err) {
+          console.error("Failed to parse WS message:", err);
         }
-      } catch {}
+      };
+
+      ws.onclose = () => {
+        setConnected(false);
+        // Reconnect after 2 seconds
+        setTimeout(connect, 2000);
+      };
+
+      wsRef.current = ws;
     };
 
-    ws.onerror = () => setConnected(false);
-    ws.onclose = () => setConnected(false);
+    connect();
 
     return () => {
-      ws.close();
-      wsRef.current = null;
+      if (wsRef.current) {
+        wsRef.current.onclose = null;
+        wsRef.current.close();
+      }
     };
-  }, [lobbyId]);
+  }, [lobbyId, onSession]);
 
   return { connected };
 }
