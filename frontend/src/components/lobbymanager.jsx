@@ -28,7 +28,7 @@ const LobbyManager = () => {
       const data = await response.json();
       const code = data?.session?.code;
 
-      localStorage.setItem('playerNickname', 'Host');
+      localStorage.setItem("playerNickname", "Host");
 
       window.location.href = `/host/${code}`;
 
@@ -57,10 +57,9 @@ const LobbyManager = () => {
 
     setIsLoading(true);
 
-
-
     try {
-      const response = await fetch(`/api/lobbies/${lobbyCode}/join`, {
+      const code = lobbyCode.trim().toUpperCase();
+      const response = await fetch(`/api/lobbies/${code}/join`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ name: hostName.trim() }),
@@ -70,7 +69,15 @@ const LobbyManager = () => {
         throw new Error("Failed to join lobby");
       }
 
-      setSuccess(`Joined lobby ${lobbyCode}!`);
+      const data = await response.json();
+
+      // store exact keys expected by PlayerView
+      localStorage.setItem(`playerNickname:${code}`, hostName.trim());
+      if (data?.playerId) {
+        localStorage.setItem(`playerId:${code}`, data.playerId);
+      }
+
+      window.location.href = `/play/${code}`;
     } catch (err) {
       setError(err.message || "Failed to join lobby");
     } finally {

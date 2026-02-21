@@ -44,7 +44,11 @@ func sessionKey(code string) string { return "session:" + normalizeCode(code) }
 func (s *RedisStore) CreateSession(hostName string) (*Session, Player, error) {
     hostName = strings.TrimSpace(hostName)
     if hostName == "" {
-        hostName = "Host"
+        if rnd, err := generateRandomHostName(); err == nil && rnd != "" {
+            hostName = rnd
+        } else {
+            hostName = "Host"
+        }
     }
     host := Player{ID: newID("host_"), Name: hostName}
 

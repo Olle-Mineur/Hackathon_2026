@@ -164,6 +164,18 @@ func generateLobbyCode() (string, error) {
     return strings.ToUpper(a + "-" + b + "-" + c), nil
 }
 
+func generateRandomHostName() (string, error) {
+    a, err := pickWord(adjectives)
+    if err != nil {
+        return "", err
+    }
+    b, err := pickWord(animals)
+    if err != nil {
+        return "", err
+    }
+    return strings.Title(a) + strings.Title(b), nil
+}
+
 func pickWord(words []string) (string, error) {
     i, err := cryptoIndex(len(words))
     if err != nil {

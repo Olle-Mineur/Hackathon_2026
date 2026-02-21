@@ -42,7 +42,9 @@ const GameControls = ({
 
     if (usingMock) {
       setTimeout(() => {
-        console.log(`Mock: ${nickname} chose ${choice} for round ${gameState.phase}`);
+        console.log(
+          `Mock: ${nickname} chose ${choice} for round ${gameState.phase}`,
+        );
         setSubmitting(false);
       }, 500);
       return;
@@ -50,13 +52,13 @@ const GameControls = ({
 
     try {
       const requestBody = { choice };
-      
+
       if (playerId) {
         requestBody.playerId = playerId;
       } else {
         requestBody.nickname = nickname;
       }
-      
+
       const response = await fetch(`/api/lobbies/${lobbyId}/choice`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -75,7 +77,9 @@ const GameControls = ({
   };
 
   // Get player's last result
-  const currentPlayer = gameState?.players?.find(p => p.nickname === nickname);
+  const currentPlayer = gameState?.players?.find(
+    (p) => p.nickname === nickname,
+  );
   const lastResult = currentPlayer?.lastGuessCorrect;
   const drinkNow = currentPlayer?.drinkNow || 0;
   const submitDistribution = async () => {
@@ -193,115 +197,71 @@ const GameControls = ({
             color: "bg-gray-800 hover:bg-gray-900",
           },
         ];
-      case 'distribution':
+      case "distribution":
         return []; // No choices during distribution phase
       default:
         return [];
     }
   };
 
-  if (gameState.phase === "distribution") {
-    const targets = (gameState.players || []).filter((p) => p.id !== me?.id);
-    return (
-      <div className="bg-white rounded-lg shadow-md p-4 space-y-3">
-        <p className="font-medium text-center">
-          Distribute drinks ({giveOutRemaining})
-        </p>
-        {targets.map((p) => (
-          <div
-            key={p.id}
-            className="flex items-center justify-between border rounded p-2"
-          >
-            <span>{p.nickname}</span>
-            <div className="flex items-center gap-2">
-              <button
-                onClick={() => dec(p.id)}
-                className="px-3 py-1 bg-gray-200 rounded"
-              >
-                -
-              </button>
-              <span className="w-6 text-center">{allocations[p.id] || 0}</span>
-              <button
-                onClick={() => inc(p.id)}
-                disabled={leftToAllocate <= 0}
-                className="px-3 py-1 bg-blue-600 text-white rounded disabled:opacity-50"
-              >
-                +
-              </button>
-            </div>
-          </div>
-        ))}
-        <p className="text-sm text-gray-600 text-center">
-          Left: {leftToAllocate}
-        </p>
-        <button
-          disabled={leftToAllocate !== 0 || submitting}
-          onClick={submitDistribution}
-          className="w-full py-3 bg-green-600 text-white rounded-lg font-bold disabled:opacity-50"
-        >
-          Confirm Distribution
-        </button>
-        {error && (
-          <p className="text-sm text-red-600 text-center">⚠️ {error}</p>
-        )}
-      </div>
-    );
-  }
-
   const choices = getChoicesForPhase();
+  // Check if player has already guessed this round
   const hasGuessed =
     (gameState?.players || []).find(
       (p) => (playerId && p.id === playerId) || p.nickname === nickname,
     )?.ready || false;
 
-  // Check if player has already guessed this round
-  const hasGuessed = currentPlayer?.ready || false;
-
-  // Distribution phase view
-  if (gameState.phase === 'distribution') {
+  if (gameState.phase === "distribution") {
     return (
-      <div className="bg-white rounded-lg shadow-md p-6">
-        <div className="text-center">
-          <h3 className="text-xl font-bold text-purple-600 mb-2">🍺 Distribution Time!</h3>
-          <p className="text-gray-600 mb-4">Drinks are being handed out...</p>
-          
-          {drinkNow > 0 && (
-            <div className="bg-orange-100 border border-orange-300 rounded-lg p-4 mb-3">
-              <p className="text-2xl font-bold text-orange-600">{drinkNow} 🍺</p>
-              <p className="text-sm text-orange-700">You need to drink {drinkNow} {drinkNow === 1 ? 'sip' : 'sips'}!</p>
-            </div>
-          )}
-          
-          <div className="text-sm text-gray-500">
-            <p>Next round starting soon...</p>
-          </div>
-        </div>
+      <div className="bg-white rounded-lg shadow-md p-4">
+        <DistributionPanel
+          players={gameState.players || []}
+          meId={me?.id}
+          giveOutRemaining={giveOutRemaining}
+          allocations={allocations}
+          onInc={inc}
+          onDec={dec}
+          onSubmit={submitDistribution}
+          submitting={submitting}
+        />
+        {error && (
+          <p className="text-sm text-red-600 text-center mt-3">⚠️ {error}</p>
+        )}
       </div>
     );
   }
 
   // Show result from previous round
-  if (lastResult !== null && gameState.phase !== 'waiting' && gameState.phase !== 'distribution') {
+  if (
+    lastResult !== null &&
+    gameState.phase !== "waiting" &&
+    gameState.phase !== "distribution"
+  ) {
     return (
       <div className="bg-white rounded-lg shadow-md p-6">
         <div className="text-center">
-          <div className={`text-2xl font-bold mb-2 ${
-            lastResult ? 'text-green-600' : 'text-red-600'
-          }`}>
-            {lastResult ? '✅ CORRECT!' : '❌ WRONG!'}
+          <div
+            className={`text-2xl font-bold mb-2 ${
+              lastResult ? "text-green-600" : "text-red-600"
+            }`}
+          >
+            {lastResult ? "✅ CORRECT!" : "❌ WRONG!"}
           </div>
-          
+
           {drinkNow > 0 && (
             <div className="bg-orange-100 border border-orange-300 rounded-lg p-3 mb-3">
-              <p className="font-semibold text-orange-700">Drink {drinkNow} {drinkNow === 1 ? 'sip' : 'sips'}!</p>
+              <p className="font-semibold text-orange-700">
+                Drink {drinkNow} {drinkNow === 1 ? "sip" : "sips"}!
+              </p>
             </div>
           )}
-          
+
           <p className="text-gray-500 text-sm">
-            {gameState.phase === 'red_black' && 'Get ready for the next round...'}
-            {gameState.phase === 'higher_lower' && 'New card coming...'}
-            {gameState.phase === 'between_outside' && 'Next round starting...'}
-            {gameState.phase === 'suit' && 'Choose your suit...'}
+            {gameState.phase === "red_black" &&
+              "Get ready for the next round..."}
+            {gameState.phase === "higher_lower" && "New card coming..."}
+            {gameState.phase === "between_outside" && "Next round starting..."}
+            {gameState.phase === "suit" && "Choose your suit..."}
           </p>
         </div>
       </div>
@@ -349,10 +309,12 @@ const GameControls = ({
             "Will the next card be Between or Outside?"}
           {gameState.phase === "suit" && "Choose your suit:"}
         </p>
-        
-        <div className={`grid gap-3 ${
-          choices.length === 4 ? 'grid-cols-2' : 'grid-cols-2'
-        }`}>
+
+        <div
+          className={`grid gap-3 ${
+            choices.length === 4 ? "grid-cols-2" : "grid-cols-2"
+          }`}
+        >
           {choices.map((choice) => (
             <button
               key={choice.value}
@@ -378,9 +340,7 @@ const GameControls = ({
       )}
 
       {error && (
-        <p className="text-sm text-red-600 text-center mt-3">
-          ⚠️ {error}
-        </p>
+        <p className="text-sm text-red-600 text-center mt-3">⚠️ {error}</p>
       )}
 
       {usingMock && (

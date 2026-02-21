@@ -64,9 +64,7 @@ func main() {
             return
         }
 
-        hostName := generateRandomHostName()
-
-        session, host, err := store.CreateSession(hostName)
+        session, host, err := store.CreateSession("") // default host name in store
         if err != nil {
             http.Error(w, err.Error(), http.StatusInternalServerError)
             return
@@ -463,16 +461,4 @@ func writeJSON(w http.ResponseWriter, status int, v any) {
     w.Header().Set("Content-Type", "application/json")
     w.WriteHeader(status)
     _ = json.NewEncoder(w).Encode(v)
-}
-
-func generateRandomHostName() string {
-    const charset = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
-    const length = 16
-    
-    rand.Seed(time.Now().UnixNano())
-    b := make([]byte, length)
-    for i := range b {
-        b[i] = charset[rand.Intn(len(charset))]
-    }
-    return "Host_" + string(b)
 }
