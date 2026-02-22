@@ -225,16 +225,10 @@ func AdvanceRound(s *Session) error {
         s.Game.Started = false
         s.Game.Deadline = nil
 
-        // still run distribution if anyone has drinks to give out
-        if hasAnyGiveOutRemaining(s) {
-            deadline := time.Now().UTC().Add(DistributionDuration)
-            s.Game.DistributionActive = true
-            s.Game.DistributionDeadline = &deadline
-            return nil
-        }
-
+        // Do NOT open distribution here
         s.Game.DistributionActive = false
         s.Game.DistributionDeadline = nil
+
         s.Game.Round++ // keeps UI in result
         return nil
     }

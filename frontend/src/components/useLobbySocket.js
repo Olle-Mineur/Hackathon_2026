@@ -7,9 +7,7 @@ export const mapSessionToViewState = (session) => {
   const started = game?.started ?? false;
 
   const distributionDeadline = game?.distributionDeadline ?? null;
-  const distributionActive =
-    Boolean(game?.distributionActive) ||
-    (distributionDeadline && !started && round >= 4);
+  const distributionActive = Boolean(game?.distributionActive);
 
   const activePlayers = game?.activePlayers || [];
   const noActivePlayersLeft =

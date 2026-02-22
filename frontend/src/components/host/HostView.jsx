@@ -209,7 +209,10 @@ const HostView = ({ lobbyId }) => {
         {error && <p className="text-yellow-500 text-sm mt-2">{error}</p>}
       </div>
 
-      <div className="max-w-4xl mx-auto">
+      {/* Scale down cards during the result phase */}
+      <div
+        className={`mx-auto transition-all duration-500 ${gameState?.phase === "result" ? "max-w-md scale-75 origin-top mb-8" : "max-w-4xl"}`}
+      >
         <CardDisplay
           currentCard={gameState?.currentCard}
           previousCard={gameState?.previousCard}
@@ -217,19 +220,20 @@ const HostView = ({ lobbyId }) => {
         />
       </div>
 
-      <div className="max-w-2xl mx-auto mt-8 text-center">
-        <div className="bg-gray-800 rounded-lg p-4">
-          <h2 className="text-2xl font-bold text-white mb-2">
+      {/* Enlarged Game Info & Results Panel */}
+      <div className="max-w-4xl mx-auto mt-8 text-center">
+        <div className="bg-gray-800 rounded-xl p-6 shadow-2xl">
+          <h2 className="text-3xl font-bold text-white mb-4">
             {!gameState?.phase && "Waiting for game..."}
             {gameState?.phase === "red_black" && "🔴 Red or ⚫ Black?"}
             {gameState?.phase === "higher_lower" && "📈 Higher or 📉 Lower?"}
             {gameState?.phase === "between_outside" && "↔️ Between or Outside?"}
-            {gameState?.phase === "result" && "🏆 Results"}
+            {gameState?.phase === "result" && "🏆 Final Results"}
           </h2>
 
           {gameState?.noActivePlayersLeft && (
-            <div className="mt-4 rounded-lg border border-orange-400 bg-orange-100 px-4 py-3">
-              <p className="font-bold text-orange-800">
+            <div className="mt-4 mb-6 rounded-lg border border-orange-400 bg-orange-100 px-4 py-3">
+              <p className="font-bold text-orange-800 text-lg">
                 All lost/tapped out. Time to give drinks!
               </p>
             </div>
@@ -238,11 +242,11 @@ const HostView = ({ lobbyId }) => {
           {gameState?.deadline &&
             gameState?.phase !== "waiting" &&
             gameState?.phase !== "result" && (
-              <div className="mt-2 mb-1">
+              <div className="mt-2 mb-4">
                 <div className="flex items-center justify-center gap-2">
-                  <span className="text-gray-400 text-sm">⏱️ Time left:</span>
+                  <span className="text-gray-400 text-lg">⏱️ Time left:</span>
                   <span
-                    className={`font-mono text-xl font-bold ${
+                    className={`font-mono text-3xl font-bold ${
                       isExpired
                         ? "text-red-500"
                         : formattedTime && formattedTime < "00:10"
@@ -257,38 +261,52 @@ const HostView = ({ lobbyId }) => {
             )}
 
           {gameState?.phase === "result" && (
-            <div className="max-w-2xl mx-auto mt-6 bg-gray-800 rounded-lg p-4">
-              <h3 className="text-lg font-semibold text-white mb-3">
-                Final Results
-              </h3>
-              <div className="space-y-2">
+            <div className="mt-6">
+              <div className="space-y-3">
                 {(gameState.players || [])
                   .slice()
                   .sort(
                     (a, b) => (b.lifetimeDrank || 0) - (a.lifetimeDrank || 0),
                   )
-                  .map((p) => (
+                  .map((p, index) => (
                     <div
                       key={p.id || p.nickname}
-                      className="flex items-center justify-between bg-gray-700 rounded px-3 py-2"
+                      className="flex items-center justify-between bg-gray-700 rounded-lg px-6 py-4"
                     >
-                      <span className="text-white">{p.nickname}</span>
-                      <span className="text-gray-200 text-sm">
-                        Drink: {p.drinkNow ?? 0} • Given: {p.givenOut ?? 0} •
-                        Total drank: {p.lifetimeDrank ?? p.score ?? 0}
+                      <div className="flex items-center gap-4">
+                        <span className="text-2xl font-bold text-gray-400">
+                          #{index + 1}
+                        </span>
+                        <span className="text-white text-2xl font-bold">
+                          {p.nickname}
+                        </span>
+                      </div>
+                      <span className="text-gray-200 text-lg">
+                        Drink:{" "}
+                        <strong className="text-orange-400">
+                          {p.drinkNow ?? 0}
+                        </strong>{" "}
+                        • Given:{" "}
+                        <strong className="text-green-400">
+                          {p.givenOut ?? 0}
+                        </strong>{" "}
+                        • Total drank:{" "}
+                        <strong className="text-red-400">
+                          {p.lifetimeDrank ?? p.score ?? 0}
+                        </strong>
                       </span>
                     </div>
                   ))}
               </div>
 
-              <div className="mt-4">
+              <div className="mt-8">
                 <button
                   onClick={handleRestartGame}
                   disabled={restartingGame}
-                  className={`px-6 py-3 rounded-lg font-bold transition-all ${
+                  className={`w-full py-4 rounded-xl font-bold text-2xl transition-all ${
                     restartingGame
                       ? "bg-gray-600 text-gray-300 cursor-not-allowed"
-                      : "bg-blue-600 text-white hover:bg-blue-700 active:scale-95"
+                      : "bg-blue-600 text-white hover:bg-blue-700 active:scale-95 shadow-lg"
                   }`}
                 >
                   {restartingGame ? "Restarting..." : "RESTART GAME"}
@@ -296,6 +314,7 @@ const HostView = ({ lobbyId }) => {
               </div>
             </div>
           )}
+
           {gameState?.phase === "waiting" && (
             <div className="mt-4">
               <button
@@ -323,13 +342,27 @@ const HostView = ({ lobbyId }) => {
         </div>
       </div>
 
-      <div className="max-w-2xl mx-auto mt-8">
-        <h3 className="text-lg font-semibold text-white mb-3">Players</h3>
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+      {/* Expanded & Responsive Players Grid */}
+      <div className="max-w-7xl mx-auto mt-12 mb-8">
+        <h3 className="text-xl font-semibold text-gray-400 mb-4 text-center">
+          Players ({gameState?.players?.length || 0})
+        </h3>
+        <div className="flex flex-wrap justify-center gap-3">
           {gameState?.players?.map((player, index) => (
-            <div key={index} className="bg-gray-800 rounded p-2 text-center">
-              <span className="text-white">{player.nickname}</span>
-              {player.ready && <span className="ml-2 text-green-500">✓</span>}
+            <div
+              key={index}
+              className={`rounded-xl px-5 py-3 text-center min-w-35 shadow-lg transition-colors border ${
+                player.ready
+                  ? "bg-green-900/30 border-green-600"
+                  : "bg-gray-800 border-gray-700"
+              }`}
+            >
+              <span className="text-white font-medium text-lg">
+                {player.nickname}
+              </span>
+              {player.ready && (
+                <span className="ml-2 text-green-400 font-bold">✓</span>
+              )}
             </div>
           ))}
         </div>
