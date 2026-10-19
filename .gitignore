@@ -1,2 +1,7 @@
 tmp/
 .env
+
+# AI Assistant & Skills
+.claude/
+.antigravity/
+CLAUDE.md
